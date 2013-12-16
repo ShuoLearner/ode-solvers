@@ -10,69 +10,115 @@ typedef void (*pEvalF)(const size_t *, const double *,
 		       const double *, double * );
 
 
+struct SRoot
+{
+  size_t id;
+  double t;
+};
+
+
+
 class CExpRKMethod:
 {
   /*============Functions============*/
  public:
+
+  //*********************************//
+  //* Constructor and Destructor    *//
+  //*********************************//
+
+  /*
+   * Default constructor
+   */
   CExpRKMethod();
 
+  /*
+   * Default destructor
+   */
   ~CExpRKMethod();
+
+  //*************************//
+  //* Main Process Function *//
+  //*************************//
+  void integrate();
+
+
+
+  //***************************************//
+  //* Functions for System Initialization *//
+  //***************************************//
+  
+
+
+
+  //***********************************//
+  //* Functions for step size control *//
+  //***********************************//
+
+
+
+
+  //*****************************//
+  //* Function for Root Finder  *//
+  //*****************************//
 
 
   /*============Attributes============*/
 
-  //--------ODE Solver Elements--------
+  //*****************************************//
+  //* Attributs that should be set by users *//
+  //*****************************************//
  public:
   /*
-   * dim, dimension of this problem
+   * mDim, dimension of this problem
    */
-  size_t dim;
+  size_t mDim;
 
 
   /*
-   * absTol, absolute error tolerance 
-   * relTol. relative error tolerance
+   * mAbsTol, absolute error tolerance 
+   * mRelTol. relative error tolerance
    */ 
-  double absTol;
-  double relTol;
+  double mAbsTol;
+  double mRelTol;
 
   /*
-   * t, current time
+   * mT, current time
    */
-  double t;
+  double mT;
 
 
   /*
-   * tEnd, terminal time this solver will reach
+   * mTEnd, terminal time this solver will reach
    */
-  double tEnd;
+  double mTEnd;
   
   /*
-   * y, a double pointer pointing to an array recording 
-   *    system values at privous step
+   * mY, a double pointer pointing to an array recording 
+   *     system values at privous step
    */
-  double *y;
+  double *mY;
 
   /*
-   * pDerivFunc, function pointer of function calculating
+   * mDerivFunc, function pointer of function calculating
    *    derivatives
    */
-  pEvalF pDerivFunc;
+  pEvalF mDerivFunc;
 
 
   /*
-   * pEventFunc, function pointer of function calculating
+   * mEventFunc, function pointer of function calculating
    *    event values
    */
-  pEvalR pEventFunc;
+  pEvalR mEventFunc;
 
   
   /*
-   * static, a boolin variable 
-   * static == 1, write statistic results into a txt file
-   * static == 0, do not output statistic results
+   * mStatic, a boolin variable 
+   * mStatic == 1, write statistic results into a txt file
+   * mStatic == 0, do not output statistic results
    */
-  bool statis;
+  bool mStatis;
 
   
  private:
@@ -81,15 +127,15 @@ class CExpRKMethod:
   //**********************************************//
  
   /*
-   * tNew, new time in the next step
+   * mTNew, new time in the next step
    */
-  double tNew;
+  double mTNew;
 
   /*
-   * yNew, a double pointer pointing to an arrya recording
-   *       system values at new step
+   * mYNew, a double pointer pointing to an arrya recording
+   *        system values at new step
    */
-  double *yNew;
+  double *mYNew;
 
   //***********************************************************//
   //* Some coefficients should be set for process of one step *//
@@ -102,107 +148,115 @@ class CExpRKMethod:
   //***********************************************************//
 
   /*
-   * A, a double pointer of a two dimension array, recording 
-   *    coefficients a_ij
+   * mA, a double pointer of a two dimension array, recording 
+   *     coefficients a_ij
    */
-  double **A;
+  double **mA;
 
   /*
-   * B, a double array pointer, recording coefficients b_i
+   * mB, a double array pointer, recording coefficients b_i
    */
-  double *B;
+  double *mB;
 
   /*
-   * C, a double array pointer, recording coefficients c_i
+   * mC, a double array pointer, recording coefficients c_i
    */
-  double *C;
+  double *mC;
 
   /*
-   * E, a double array pointer, recording coefficients e_i
-   *    for absolute error calculation
+   * mE, a double array pointer, recording coefficients e_i
+   *     for absolute error calculation
    */
-  double *E;
+  double *mE;
 
   /*
-   * K, a double pointer of a two dimension array, recording 
-   *    approximated derivatives 
+   * mK, a double pointer of a two dimension array, recording 
+   *     approximated derivatives 
    */
-  double **K;
+  double **mK;
 
   //*********************************************************//
   //* Step size h, and step size control related parameters *//
   //*********************************************************//
   
   /*
-   * p, the order this solver provides
+   * mP, the order this solver provides
    */
-  size_t p;
+  size_t mP;
 
   /*
-   * h, step size
+   * mh, step size
    */
-  double h;
+  double mh;
 
   /*
-   * hMin, minimum step size
+   * mhMin, minimum step size
    */
-  double hMin;
+  double mhMin;
 
   /*
-   * hMax, maximum step size
+   * mhMax, maximum step size
    */
-  double hMax;
+  double mhMax;
 
   /*
-   * fac, a number as a factor for step size control
+   * mFac, a number as a factor for step size control
    */
-  double fac;
+  double mFac;
 
   /*
-   * facMin, minimum factor value
+   * mFacMin, minimum factor value
    */
-  double facMin;
+  double mFacMin;
 
   /*
-   * facMax, maximum factor value
+   * mFacMax, maximum factor value
    */
-  double facMax;
+  double mFacMax;
 
   /*
-   * facMaxRej, maxmum factor value after a rejected step
+   * mFacMaxRej, maxmum factor value after a rejected step
    */
-  double facMaxRej;
+  double mFacMaxRej;
 
   //*********************************************************//
   //* Some state records, for usage of ODE solver control   *//
   //*********************************************************//
   
   /*
-   * hFailed, a boolean variable 
-   * hFailed == true, success after a reject step
-   * hFailed == false, previous step is accepted
+   * mhFailed, a boolean variable 
+   * mhFailed == true, success after a reject step
+   * mhFailed == false, previous step is accepted
    */
-  bool hFailed;
+  bool mhFailed;
   
   /*
-   * odeState, an int varialbe, recording the state of the solver
+   * mODEState, an int varialbe, recording the state of the solver
    * Input:
-   *   odeState == 0, ODE solver is called firstly, need to be initialized
-   *   odeState == 1, ODE solver is called continuously, without initialization
+   *   mODEState == 0, ODE solver is called firstly, need to be initialized
+   *   mODEState == 1, ODE solver is called continuously, without initialization
    *
    * Output:
-   *   odeState == -1, some errors happened
-   *   odeState == 1, ODE solver stops at time t < tEnd, indicating having events
-   *   odeState == 2, ODE solver finishes integration at t == tEnd;
+   *   mODEState == -1, some errors happened
+   *   mODEState == 1, ODE solver stops at time t < tEnd, indicating having events
+   *   mODEState == 2, ODE solver finishes integration at t == tEnd;
    */
-  int odeState;
+  int mODEState;
 
   /*
-   * hasEvent, a boolean variable
-   * hasEvent == true,  pEventFunc != NULL
-   * hasEvent == false, pEventFunc == NULL
+   * mHasEvent, a boolean variable
+   * mHasEvent == true,  pEventFunc != NULL
+   * mHasEvent == false, pEventFunc == NULL
    */
-  bool hasEvent;
+  bool mHasEvent;
+
+  /*
+   * mHasInitialized, a boolean variable
+   * After user calls integrate(), algorithm should first
+   * check whether mHasInitialized == true. If not, 
+   * outputs errors
+   */
+  bool mHasInitialized;
 
   
   //********************************************//
@@ -210,24 +264,50 @@ class CExpRKMethod:
   //********************************************//
   
   /*
-   * nStep, a size_t variable, recording how many steps are executed
+   * mStepNum, a size_t variable, recording how many steps are executed
    */
-  size_t nStep;
+  size_t mStepNum;
 
   /*
-   * nAccept, a size_t varialbe, recording how many successful steps
+   * mAcceptNum, a size_t varialbe, recording how many successful steps
    */
-  size_t nAccept;
+  size_t mAcceptNum;
 
   /*
-   * nfEval, a size_t variable, recording how many times pDerivFunc 
-   *         are called
+   * mfEvalNum, a size_t variable, recording how many times pDerivFunc 
+   *            are called
    */
-  size_t nfEval;
+  size_t mfEvalNum;
 
   //******************************************//
   //* Variables for Root Finding functions   *//
   //******************************************//
 
+ public:
+  /*
+   * mRootNum, a size_t variable, number of roots
+   */
+  size_t mRootNum;
+
+ private:
+  /*
+   * mRootQueue, a queue of struct SRoot, which recording
+   * root index and corresponding time, in a time ascending 
+   * order
+   */
+  std::queue<SRoot> mRootQueue;
+
+  /*
+   * mState, a double array pointer, recording the state 
+   *        of the system
+   *        mState[0] = t;
+   *        mState[1] ~ mState[dim] = y
+   */
+  double *mState;
+
+  /*
+   * mBI, a two dimension double array pointer, for interpolation 
+   */
+  double **mBI;
 
 };
