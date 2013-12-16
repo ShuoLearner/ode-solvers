@@ -1,5 +1,9 @@
 #include <iostream>
+#include <queue>
 
+
+#ifndef CEXPRKMETHOD
+#define CEXPRKMETHOD
 
 //Define function pointer of functions for computing derivative and 
 //event function
@@ -47,7 +51,7 @@ class CExpRKMethod:
   //***************************************//
   //* Functions for System Initialization *//
   //***************************************//
-  
+  void initialize();
 
 
 
@@ -148,6 +152,16 @@ class CExpRKMethod:
   //***********************************************************//
 
   /*
+   * mP, the order this solver provides
+   */
+  size_t mP;
+
+  /*
+   * mStage, the stage of this method
+   */
+  size_t mStage;
+
+  /*
    * mA, a double pointer of a two dimension array, recording 
    *     coefficients a_ij
    */
@@ -179,11 +193,6 @@ class CExpRKMethod:
   //* Step size h, and step size control related parameters *//
   //*********************************************************//
   
-  /*
-   * mP, the order this solver provides
-   */
-  size_t mP;
-
   /*
    * mh, step size
    */
@@ -306,8 +315,11 @@ class CExpRKMethod:
   double *mState;
 
   /*
-   * mBI, a two dimension double array pointer, for interpolation 
+   * mI, a two dimension double array pointer, for interpolation 
    */
-  double **mBI;
+  double **mI;
 
 };
+
+
+#endif 
