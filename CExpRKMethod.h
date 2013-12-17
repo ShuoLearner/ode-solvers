@@ -5,6 +5,9 @@
 #ifndef CEXPRKMETHOD
 #define CEXPRKMETHOD
 
+
+#define MAX_STAGE 8
+
 //Define function pointer of functions for computing derivative and 
 //event function
 typedef void (*pEvalR)(const size_t, const double * , const double * ,
@@ -98,10 +101,10 @@ class CExpRKMethod:
   double mTEnd;
   
   /*
-   * mY, a double pointer pointing to an array recording 
-   *     system values at privous step
-   */
-  double *mY;
+   * mInitY, a vector to store the initial value of system
+   *         Before use, user should clean it
+   */ 
+  std::vector<double> mInitY;
 
   /*
    * mDerivFunc, function pointer of function calculating
@@ -124,6 +127,22 @@ class CExpRKMethod:
    */
   bool mStatis;
 
+  /*
+   * mODEState, an int varialbe, recording the state of the solver
+   * Input:
+   *   mODEState == 0, ODE solver is called firstly, need to be initialized
+   *   mODEState == 1, ODE solver starts a new integration, without initialization
+   *   mODEState == 2, ODE solver continues integration, coming back from event
+   *                   has been found
+   *
+   * Output:
+   *   mODEState == -2, some errors happened
+   *   mODEState == 1, ODE solver stops at time t < tEnd, indicating having events
+   *   mODEState == 2, ODE solver finishes integration at t == tEnd;
+   */
+  int mODEState;
++
+
   
  private:
   //**********************************************//
@@ -134,6 +153,12 @@ class CExpRKMethod:
    * mTNew, new time in the next step
    */
   double mTNew;
+
+   /*
+   * mY, a double pointer pointing to an array recording 
+   *     system values at privous step
+   */
+  double *mY;
 
   /*
    * mYNew, a double pointer pointing to an arrya recording
@@ -162,26 +187,26 @@ class CExpRKMethod:
   size_t mStage;
 
   /*
-   * mA, a double pointer of a two dimension array, recording 
+   * mA, a double two dimension array, recording 
    *     coefficients a_ij
    */
-  double **mA;
+  double mA[MAX_STAGE][MAX_STAGE];
 
   /*
-   * mB, a double array pointer, recording coefficients b_i
+   * mB, a double array, recording coefficients b_i
    */
-  double *mB;
+  double mB[MAX_STAGE];
 
   /*
-   * mC, a double array pointer, recording coefficients c_i
+   * mC, a double array, recording coefficients c_i
    */
-  double *mC;
+  double mC[MAX_STAGE];
 
   /*
-   * mE, a double array pointer, recording coefficients e_i
+   * mE, a double array, recording coefficients e_i
    *     for absolute error calculation
    */
-  double *mE;
+  double mE[MAX_STAGE];
 
   /*
    * mK, a double pointer of a two dimension array, recording 
@@ -238,19 +263,6 @@ class CExpRKMethod:
    * mhFailed == false, previous step is accepted
    */
   bool mhFailed;
-  
-  /*
-   * mODEState, an int varialbe, recording the state of the solver
-   * Input:
-   *   mODEState == 0, ODE solver is called firstly, need to be initialized
-   *   mODEState == 1, ODE solver is called continuously, without initialization
-   *
-   * Output:
-   *   mODEState == -1, some errors happened
-   *   mODEState == 1, ODE solver stops at time t < tEnd, indicating having events
-   *   mODEState == 2, ODE solver finishes integration at t == tEnd;
-   */
-  int mODEState;
 
   /*
    * mHasEvent, a boolean variable
@@ -258,14 +270,6 @@ class CExpRKMethod:
    * mHasEvent == false, pEventFunc == NULL
    */
   bool mHasEvent;
-
-  /*
-   * mHasInitialized, a boolean variable
-   * After user calls integrate(), algorithm should first
-   * check whether mHasInitialized == true. If not, 
-   * outputs errors
-   */
-  bool mHasInitialized;
 
   
   //********************************************//
@@ -315,9 +319,19 @@ class CExpRKMethod:
   double *mState;
 
   /*
-   * mI, a two dimension double array pointer, for interpolation 
+   * mI, a two dimension double array, for interpolation 
    */
-  double **mI;
+  double mI[MAX_STAGE][MAX_STAGE];
+
+  /*
+   * mOrderY, the order of Y interpolation can achieve
+   */
+  size_t mOrderY;
+
+  /*
+   * mOrderYp, the order of Y prime interpolation can achieve
+   */
+  size_t mOrcerYp;
 
 };
 
