@@ -137,18 +137,25 @@ class CExpRKMethod:
    *
    * Output:
    *   mODEState == -2, some errors happened
-   *   mODEState == 1, ODE solver stops at time t < tEnd, indicating having events
-   *   mODEState == 2, ODE solver finishes integration at t == tEnd;
+   *   mODEState == 3, ODE solver stops at time t < tEnd, indicating having events
+   *   mODEState == 4, ODE solver finishes integration at t == tEnd;
    */
   int mODEState;
-+
 
   
  private:
   //**********************************************//
   //* Variables recording system states          *//
   //**********************************************//
- 
+  
+  /*
+   * mODEStateRecord, recording state of mODEState 
+   * before return, in usage of checking correctness
+   * of mODEState setting at the initial step
+   */
+  int mODEStateRecord;
+  
+
   /*
    * mTNew, new time in the next step
    */
@@ -266,8 +273,8 @@ class CExpRKMethod:
 
   /*
    * mHasEvent, a boolean variable
-   * mHasEvent == true,  pEventFunc != NULL
-   * mHasEvent == false, pEventFunc == NULL
+   * mHasEvent == true,  mEventFunc != NULL
+   * mHasEvent == false, mEventFunc == NULL
    */
   bool mHasEvent;
 
@@ -331,7 +338,7 @@ class CExpRKMethod:
   /*
    * mOrderYp, the order of Y prime interpolation can achieve
    */
-  size_t mOrcerYp;
+  size_t mOrderYp;
 
 };
 

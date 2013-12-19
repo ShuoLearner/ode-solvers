@@ -45,8 +45,9 @@ void CExpRKMethod::CExpRKMethod()
   // Default solver status
   mStatis         = false;
   mhFailed        = false;
-  mODEState       = -2;
   mHasEvent       = false;
+  mODEState       = 0;
+  mODEStateRecord = 0;
 
   // Default root finder related
   mRootNum = 0;
@@ -85,7 +86,7 @@ voidCExpRKMethod::~CExpRKMethod()
 
   if(mK)
     {
-      for(int i=mState-1; i>=0; i--)
+      for(int i=mDim-1; i>=0; i--)
 	delete [] mK[i];
       
       delete [] mK;
@@ -105,21 +106,56 @@ void CExpRKMethod::integrate()
   //====================//
   if (mODEState == 0) // need initialization
     {
+      // initialize coefficients, mY and mK, 
+      // in case that dimension is updated 
+      // for a new problem
       initialize();
       if (mODEState == -2)
-	return;
+	{
+	  mODEStateRecord = -2;
+	  return;
+	}
     }
-  if (mODEState == 0)
+  if (mODEState == 1)
     {
+      // In such case, parameters must be changed by
+      // users, such as error tolerance and mInitY, 
+      // exept the dimension of system.
       checkParameter();
       if (mODEState == -2)
-	return;
+	{
+	  mODEStateRecord = -2;
+	  return;
+	}
 
       setInitialY();
+      setInitialStepSize();
     }
-  else if(mODEState == 1)
+  else if(mODEState == 2)
     {
-      //check if there are events left should be 
+      //Deal with errors 
+      if (mODESateRecord != 3) 
+	{
+	  if (mODEStateRecord == -2)
+	    std::cout << "Errors happen when continuing integration. Parameters should be check!" << std::endl;
+
+	  if (mODEStateRecord == 4)
+	    std::cout << "Integration has been finished. Please restart this solver by setting new time span!" << std::endl;
+
+	  mODEState = -2;
+	  mODEStateRecord = mODEState;
+	  return;
+	}
+
+
+      //If events queue isn't empty, deal with the next event, and return
+      if (!mRootQueue.empty())
+	{
+
+	}
+      
+      //else do a new step.
+
     }
   else
     {
@@ -134,26 +170,23 @@ void CExpRKMethod::integrate()
 //***************************************//
 void CExpRKMethod::initialize()
 {
-  
-  if (mODEState != 0) //first call should set mODEState = 0
-    {
-      mODEstate = -2;
-      std::cout << "At the first call of this solver, mODEState should be 0!" << std::endl;
-      return;
-    }
-
   checkParameter();
   if (mODEState == -2)
     return;
 
   setInitY();
   setCoeff();
+  setInitialSetpSize();
 
-  mODEState = 2;
+  mODEState = 1;
   mHasInitialized = true;
 
-  return;
+  if (!mEventFunc) //no event 
+    mHasEvent = false;
+  else
+    mHasEvent = true;
 
+  return;
 }
 
 
@@ -225,6 +258,12 @@ void CExpRKMethod::setCoeff()
       for(int c=0; c<mOrderY; c++)
 	mI[r][c] = I[r][c];
     }
+
+  //----Set mK----
+  mK = new int*[mDim];
+  for (int r=0; r<mDim; r++)
+    mK[r] = new int[mStage];
+
 
   return;
 }
