@@ -1,4 +1,5 @@
 #include "CExpRKMethod.h"
+#include <math.h>
 
 
 //*********************************//
@@ -58,6 +59,12 @@ void CExpRKMethod::CExpRKMethod()
   mStepNum   = 0;
   mAcceptNum = 0;
   mfEvalNum  = 0;
+
+
+  // Default tempt variable
+  mZ1 = NULL;
+  mZ2 = NULL;
+  mZ3 = NULL;
 }
 
 /*
@@ -86,12 +93,31 @@ voidCExpRKMethod::~CExpRKMethod()
 
   if(mK)
     {
-      for(int i=mDim-1; i>=0; i--)
+      for(int i=mStage-1; i>=0; i--)
 	delete [] mK[i];
       
       delete [] mK;
       mK = NULL;
     }
+
+  if(mZ1)
+    {
+      delete [] mZ1;
+      mZ1 = NULL;
+    }
+
+  if(mZ2)
+    {
+      delete [] mZ2;
+      mZ2 = NULL;
+    }
+
+  if(mZ3)
+    {
+      delete [] mZ3;
+      mZ3 = NULL;
+    }
+
   return;
 }
 
@@ -116,7 +142,7 @@ void CExpRKMethod::integrate()
 	  return;
 	}
     }
-  if (mODEState == 1)
+  else if (mODEState == 1)
     {
       // In such case, parameters must be changed by
       // users, such as error tolerance and mInitY, 
@@ -179,7 +205,6 @@ void CExpRKMethod::initialize()
   setInitialSetpSize();
 
   mODEState = 1;
-  mHasInitialized = true;
 
   if (!mEventFunc) //no event 
     mHasEvent = false;
@@ -192,8 +217,9 @@ void CExpRKMethod::initialize()
 
 void CExpRKMethod::setInitialY()
 {
+  // ----(1)----
   if (mY)
-    delete mY;
+    delete [] mY;
 
   mY = new double[mDim];
  
@@ -203,6 +229,22 @@ void CExpRKMethod::setInitialY()
   for (int i=0; it<itEnd; it++, i++)
       mY[i] = *it;
   
+  // ----(2)----
+  if (mZ1)
+    delete [] mZ1;
+  
+  mZ1 = new double[mDim];
+
+  if (mZ2)
+    delete [] mZ2;
+  
+  mZ2 = new double[mDim];
+
+  if (mZ3)
+    delete [] mZ3;
+  
+  mZ3 = new double[mDim];
+
   return;
 }
 
@@ -260,20 +302,75 @@ void CExpRKMethod::setCoeff()
     }
 
   //----Set mK----
-  mK = new int*[mDim];
-  for (int r=0; r<mDim; r++)
-    mK[r] = new int[mStage];
+  mK = new int*[mStage];
+  for (int r=0; r<mStage; r++)
+    mK[r] = new int[mDim];
 
 
   return;
 }
 
 
+/*
+ *
+ */
 
+
+/*
+ * setInitialStepSize()
+ * Function is used to set the initial step size mh. Algorithm which is applied 
+ * is the one given in Book "Solving Ordinary Differential Equitions I", page
+ * 169. Vector norm is the infinity norm picking the element having maximum 
+ * absolute value.
+ */
 void CExpRKMethod::setInitialStepSize()
 {
+  // (1) First, set parameters, related step size control
+  double absT   = dAbs(mT);
 
+  mhMin      = (absT>0) ? (absT*EPS*16.0) : EPS0;
+  mhMax      = dAbs(mTEnd-mT) / 10;
+  mFac       = 0.8;
+  mFacMin    = 0.1;
+  mFacMax    = 4;
+  mFacMaxRej = 1.0;
+  
+  double d0, d1, d2, h0, h1;
+  
+  // (2) Calculate h0
+  d0 = infNorm(mDim, mY); 
+  
+  mDerivFunc(&mDim, &mT, &mY, &mZ1);//mZ1 is y'(t)
+  d1 = infNorm(mDim, mZ1);
 
+  if ((d0<1.0e-5) || (d1<1.0e-5))
+    h0 = 1.0e-6;
+  else
+    h0 = 0.01*(d0/d1);
+
+  // (3) Calculate h1
+  for(size_t i=0; i<mDim; i++)
+    mZ3[i] = mY[i] + h0*mZ1[i]; // mZ3 is y(t+h0)
+
+  double tCp = mT;
+  mT += h0;
+  mDerivFunc(&mDim, &mT, &mZ3, &mZ2);// mZ2 is y'(t+h0)
+  for(size_t i=0; i<mDim; i++)
+    mZ3[i] = (mZ1[i]-mZ2[i])/h0;  // mZ3 is y''(t+h0)
+
+  d2 = infNorm(mDim, mZ3);
+
+  double tmp = dMax(d1, d2);
+  if (tmp <= 1.0e-15)
+    h1 = dMax(1.0e-6, h0*1.0e-3);
+  else
+    h1 = pow(0.01/tmp, 1.0/(mP+1.0));
+
+  // (4) Calculate h
+  h = dMax(100*h0, h1);
+
+  mT = tCp;
+  return;
 
 }
 
@@ -324,5 +421,35 @@ void CExpRKMethod::checkParameter()
 
   mODEState = state;
   return;
+
+}
+
+
+//***************************//
+//* Other Helpful Functions *//
+//***************************//
+double CExpRKMethod::infNorm(const size_t &len, const double &y)
+{
+  double result, tmp;
+  result =(y[0]>=0)?y[0]:-y[0];
+
+  for(size_t i=1; i<len; i++)
+    {
+      tmp = (y[i]>=0)?y[i]:-y[i];
+      if(tmp>result)
+	result = tmp;
+    }
+
+  return result;
+}
+
+double CExpRKMethod::dMax(const double &x1, const double &x2)
+{
+  return (x1>x2)?x1:x2;
+}
+
+double CExpRKMethod::dAbs(const double &x)
+{
+  return (x>0)?x:(-1*x);
 
 }

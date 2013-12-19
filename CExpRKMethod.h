@@ -7,12 +7,20 @@
 
 
 #define MAX_STAGE 8
+#define EPS       2.220446049250313e-16
+#define EPS0      4.940656458412465e-100
 
 //Define function pointer of functions for computing derivative and 
 //event function
 typedef void (*pEvalR)(const size_t, const double * , const double * ,
 		       const size_t *, double * );
 
+//Need static?
+// Parameters:
+// 1. size_t mDim
+// 2. double mT
+// 3. double mY
+// 4. double Yp
 typedef void (*pEvalF)(const size_t *, const double *, 
 		       const double *, double * );
 
@@ -339,6 +347,12 @@ class CExpRKMethod:
    * mOrderYp, the order of Y prime interpolation can achieve
    */
   size_t mOrderYp;
+
+  
+  //************************//
+  //* Some Other Attributs *//
+  //************************//
+  double *mZ1, *mZ2, *mZ3;
 
 };
 
