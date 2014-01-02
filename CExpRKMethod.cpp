@@ -20,13 +20,15 @@ void CExpRKMethod::CExpRKMethod()
   mEventFunc = NULL;
   
   // Default system state
-  mDim  = 0;
-  mT    = 0;
-  mTEnd = 0;
-  mTNew = 0;
-  mY    = NULL;
-  mYNew = NULL;
-  mK    = NULL;
+  mDim    = 0;
+  mT      = 0;
+  mTEnd   = 0;
+  mTNew   = 0;
+  mY      = NULL;
+  mYNew   = NULL;
+  mK      = NULL;
+  mYp     = NULL;
+  mFinish = false;
 
   // Default coefficients
   mP       = 0;
@@ -45,7 +47,7 @@ void CExpRKMethod::CExpRKMethod()
 
   // Default solver status
   mStatis         = false;
-  mhFailed        = false;
+  mhNoFailed      = false;
   mHasEvent       = false;
   mODEState       = 0;
   mODEStateRecord = 0;
@@ -90,6 +92,11 @@ voidCExpRKMethod::~CExpRKMethod()
       mYNew = NULL;
     }
 
+  if (mYp)
+    {
+      delete [] mYp;
+      mYp = NULL;
+    }
 
   if(mK)
     {
@@ -128,8 +135,70 @@ voidCExpRKMethod::~CExpRKMethod()
 void CExpRKMethod::integrate()
 {
   //====================//
-  // 1 check mODEstate =//
+  // 1 check mODEstate  //
   //====================//
+  checkODEState();
+  if(mODEState == 1)//Restart
+    {
+      mFinish = false;
+      setInitialY();
+      setInitialStepSize();
+      mDerivFunc(&mDim, &mT, &mY, mK[0]);//record derivative to mK
+    }
+  else if((mODEState == -2) || (mODEState == 3))//has error or has event
+    return;
+
+  //=============//
+  // 2 Main Loop //
+  //=============//
+  while(!mFinish)
+    {
+      
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      // (1) Check Whether mT is close to mTEnd //
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      if (1.1*mh >= (mTEnd-mT))
+	{
+	  mh = mTEnd - mT;
+	  mFinish = true;
+	}
+
+      
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      // (2) Continue One Step entil it successes //
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      mhNoFaild = true;
+      while(true)
+	{
+	  // (i) Do One Single Step
+	  doOneStep();
+	  
+	  // (ii) Update Statistic Record
+	  mfEvalNum += mStage;
+	  mStepNum++;
+	  
+	  // (iii) Estimate Error
+	  double error = estimateError();
+	}
+
+
+    }
+
+
+}
+
+
+/*
+ * checkODEState()
+ * Check the state attribute mODEState.
+ * If mODEState=0, first call of this method, initialization are required 
+ * If mODEState=1, restart this method, method key parameters should be checked
+ * If mODEState=2, continue from last step which has an event (mODEState=3).
+ *                 First check if events left. If not, continue, else return with next event
+ * Else, method has error.
+ */
+void CExpRKMethod::checkODEState()
+{
   if (mODEState == 0) // need initialization
     {
       // initialize coefficients, mY and mK, 
@@ -153,9 +222,6 @@ void CExpRKMethod::integrate()
 	  mODEStateRecord = -2;
 	  return;
 	}
-
-      setInitialY();
-      setInitialStepSize();
     }
   else if(mODEState == 2)
     {
@@ -177,7 +243,11 @@ void CExpRKMethod::integrate()
       //If events queue isn't empty, deal with the next event, and return
       if (!mRootQueue.empty())
 	{
+	  mODEState = 3;
+	  mODEStateRecord = mODEState;
+	  
 
+	  return;
 	}
       
       //else do a new step.
@@ -188,21 +258,119 @@ void CExpRKMethod::integrate()
       std::cout << "mODEState should be set as 0 or 1!" << std::endl;
       return;
     }
+
+ return;
 }
+
+
+/*
+ * doOneStep()
+ * This is a virtual function for RK Method which calculates approximated derivatives,
+ * new Y and new T.
+ */
+void CExpRKMethod::doOneStep()
+{
+  // (1) Calculate mK[1] to mK[mStage-1]
+  for(int s=1; s<mStage; s++)
+    {
+      mTmpT = mT + mh*mC[s];//tmp time
+
+      for(int i=0; i<mDim; i++)// tmp Y
+	mZ1[i] = mY[i];
+
+      for(int i=0; i<s; i++) //tmp Y + Yp*h
+	{
+	  double a = mA[s][i] * mh;
+	  for (int j=0; j<mDim; j++)
+	    mZ1[i] += mK[i][j] * a;
+	}
+
+      mDerivFunc(&mDim, &mTmpT, mZ1, mK[s]);
+    }
+
+  // (2) New Time, mTNew
+  size_t s = mStage-1;
+  mTNew = mT + mh*c[s];
+
+  if(mFinish)
+    {
+      mTNew = mTEnd;
+      h = mTEnd - mT;
+    }
+
+  // (3) New Y, mYNew
+  for(int i=0; i<mDim; i++)
+    mYNew[i] = mY[i];
+  
+  for (int s=0; s<mStage; s++)
+    {
+      double b = mB[s] * mh;
+      for (int i=0; i<mDim; i++)
+	mYNew[i] += b * mK[s][i];
+    }
+
+  // (4) New Yp, mZ1
+  mDerivFunc(&mDim, &mTNew, mYNew, mZ1);
+
+  return;
+}
+
+
+/*
+ * estimateError()
+ * Function that calculate error in terms of algorithms in book ""
+ * Chapter II, Automatic Step Size Control, pp 167-169.
+ */
+double CExpRKMethod::estimateError()
+{
+  // (1) Calculate |ynew - ynew*| in terms of mE
+  for (int i=0; i<mDim; i++)
+    mZ2[i] = 0;
+
+  for(int s=0; s<mStage; s++)
+    {
+      double e = mE[s] * mh;
+      for(int i=0; i<mDim; i++)
+	mZ2[i] += e * mK[s][i];
+    }
+
+
+  // (2) Calculate Standard sc=Atol + max(|y|,|ynew|)*Rtol
+  for(int i=0; i<mDim; i++)
+    mZ3[i] = mAbsTol + dmax(dabs(mY[i]), dabs(mYNew[i]))*mRelTol;
+
+  
+  // (3) Calculate Error
+  double error = 0, tmp;
+  for (int i=0; i<mDim; i++)
+    {
+      tmp = mZ2[i]/mZ3[i];
+      error += tmp*tmp;
+    }
+  error = sqrt(error/mDim);
+
+  return error;
+}
+
+
 
 
 //***************************************//
 //* Functions for System Initialization *//
 //***************************************//
+/*
+ * initialize()
+ * Initialize statistic record variables, coefficients for RK method, mODEState 
+ * and check event function mEventFunc.
+ */
 void CExpRKMethod::initialize()
 {
   checkParameter();
   if (mODEState == -2)
     return;
 
-  setInitY();
+  setStatRecord();
   setCoeff();
-  setInitialSetpSize();
 
   mODEState = 1;
 
@@ -228,6 +396,12 @@ void CExpRKMethod::setInitialY()
 
   for (int i=0; it<itEnd; it++, i++)
       mY[i] = *it;
+
+  if (mYp)
+    delete [] mYp;
+
+  mYp = new double[mDim];
+
   
   // ----(2)----
   if (mZ1)
@@ -302,9 +476,9 @@ void CExpRKMethod::setCoeff()
     }
 
   //----Set mK----
-  mK = new int*[mStage];
+  mK = new double*[mStage];
   for (int r=0; r<mStage; r++)
-    mK[r] = new int[mDim];
+    mK[r] = new double[mDim];
 
 
   return;
@@ -312,8 +486,16 @@ void CExpRKMethod::setCoeff()
 
 
 /*
- *
+ * setStatRecord()
+ * Function is used to set statistc record related variables to be 0
  */
+void CExpRKMethod::setStatRecord()
+{
+  mStepNum   = 0;
+  mAcceptNum = 0;
+  mfEvalNum  = 0;
+}
+
 
 
 /*

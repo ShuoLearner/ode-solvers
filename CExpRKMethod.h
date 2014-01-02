@@ -176,10 +176,23 @@ class CExpRKMethod:
   double *mY;
 
   /*
-   * mYNew, a double pointer pointing to an arrya recording
+   * mYNew, a double pointer pointing to an array recording
    *        system values at new step
    */
   double *mYNew;
+
+  /*
+   * mYp, a double pointer pointing to an array recording 
+   *      derivatives
+   */
+  double *mYp;
+
+  /*
+   * mFinish, a boolean variable, indicating whether integration has 
+   *          been finished or not
+   */
+  bool mFinish;
+
 
   //***********************************************************//
   //* Some coefficients should be set for process of one step *//
@@ -225,7 +238,7 @@ class CExpRKMethod:
 
   /*
    * mK, a double pointer of a two dimension array, recording 
-   *     approximated derivatives 
+   *     approximated derivatives (mStage*mDim)
    */
   double **mK;
 
@@ -273,11 +286,11 @@ class CExpRKMethod:
   //*********************************************************//
   
   /*
-   * mhFailed, a boolean variable 
-   * mhFailed == true, success after a reject step
-   * mhFailed == false, previous step is accepted
+   * mhNoFailed, a boolean variable 
+   * mhNoFailed == true, success after a reject step
+   * mhNoFailed == false, previous step is accepted
    */
-  bool mhFailed;
+  bool mhNoFailed;
 
   /*
    * mHasEvent, a boolean variable
@@ -348,12 +361,13 @@ class CExpRKMethod:
    */
   size_t mOrderYp;
 
+
   
   //************************//
   //* Some Other Attributs *//
   //************************//
   double *mZ1, *mZ2, *mZ3;
-
+  double mTmpT;
 };
 
 
