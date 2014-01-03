@@ -60,6 +60,7 @@ void CExpRKMethod::CExpRKMethod()
   // Default statistic variables
   mStepNum   = 0;
   mAcceptNum = 0;
+  mRejectNum = 0;
   mfEvalNum  = 0;
 
 
@@ -143,9 +144,19 @@ void CExpRKMethod::integrate()
       mFinish = false;
       setInitialY();
       setInitialStepSize();
-      mDerivFunc(&mDim, &mT, &mY, mK[0]);//record derivative to mK
+      mDerivFunc(&mDim, &mT, mY, mK[0]);//record derivative to mK
     }
-  else if((mODEState == -2) || (mODEState == 3))//has error or has event
+  else if (mODEState == 3) // has event
+    {
+      //If events queue isn't empty, deal with the next event, and return
+      if (!mRootQueue.empty())
+	{
+	  
+	}
+      else
+	advanceStep();
+    }
+  else if(mODEState == -2)//has error
     return;
 
   //=============//
@@ -163,11 +174,14 @@ void CExpRKMethod::integrate()
 	  mFinish = true;
 	}
 
-      
-      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
-      // (2) Continue One Step entil it successes //
-      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
-      mhNoFaild = true;
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      // (2) Set Some Parameters before One Step //
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      mhNoFaild = true;      
+
+      //~~~~~~~~~~~~~~~~~~~~~~~//
+      // (3) Continue One Step //
+      //~~~~~~~~~~~~~~~~~~~~~~~//
       while(true)
 	{
 	  // (i) Do One Single Step
@@ -175,16 +189,56 @@ void CExpRKMethod::integrate()
 	  
 	  // (ii) Update Statistic Record
 	  mfEvalNum += mStage;
-	  mStepNum++;
+	  
 	  
 	  // (iii) Estimate Error
 	  double error = estimateError();
+
+	  //(iv) Update step size mh
+	  if (error > 1.0) // Step Rejected
+	    {
+	      mhNoFailed = false;
+	      mRejectNum++;
+	      mh *= 0.5; // Use half step size h
+	      if (mh < mhMin)
+		{
+		  mODEState = -2;
+		  mODEStateRecord = mODEState;
+		  std::cout << "Failure at t=" << mT << std::endl;
+		  std::cout << "Unable to meet integration tolerances without reducing the step size below the smallest value!" << std::endl;
+		  return;
+		}
+	    }
+	  else // Step Accept
+	    {
+	      mAcceptNum++;
+	      double fac = pow(1/error, 1/(mP+1));
+
+	      if (!mhNoFailed) //previous step is rejected
+		mh *= dmin(mFacMaxRej, dmax(mFacMin, mFac*fac));
+	      else
+		mh *= dmin(mFacMax, dmax(mFacMin, mFac*fac));
+
+	      break;
+	    }
+	} // end while
+      mStepNum++;
+
+      //~~~~~~~~~~~~~~~~~~//
+      // (4) Check Events //
+      //~~~~~~~~~~~~~~~~~~//
+      if (mHasEvent)
+	{
+
 	}
 
-
+      //~~~~~~~~~~~~~~~~~~~~~~//
+      // (5) Advance New Step //
+      //~~~~~~~~~~~~~~~~~~~~~~//
+      advanceStep();
     }
 
-
+  return;
 }
 
 
@@ -238,24 +292,16 @@ void CExpRKMethod::checkODEState()
 	  mODEStateRecord = mODEState;
 	  return;
 	}
-
-
-      //If events queue isn't empty, deal with the next event, and return
-      if (!mRootQueue.empty())
+      else
 	{
 	  mODEState = 3;
 	  mODEStateRecord = mODEState;
-	  
-
 	  return;
 	}
-      
-      //else do a new step.
-
     }
   else
     {
-      std::cout << "mODEState should be set as 0 or 1!" << std::endl;
+      std::cout << "mODEState should be set as 0, 1 or 2!" << std::endl;
       return;
     }
 
@@ -353,6 +399,22 @@ double CExpRKMethod::estimateError()
 }
 
 
+
+/*
+ * advanceStep()
+ * Set new mT, mY and mK[0]
+ */
+void CExpRKMethod::advanceStep()
+{
+  mT = mTNew;
+  for(int i=0; i<mDim; i++)
+    mY[i] = mYNew[i];
+
+  for(int i=0; i<mDim; i++)
+    mK[0][i] = mZ1[i];
+
+  return;
+}
 
 
 //***************************************//
@@ -493,6 +555,7 @@ void CExpRKMethod::setStatRecord()
 {
   mStepNum   = 0;
   mAcceptNum = 0;
+  mRejectNum = 0;
   mfEvalNum  = 0;
 }
 
@@ -508,10 +571,10 @@ void CExpRKMethod::setStatRecord()
 void CExpRKMethod::setInitialStepSize()
 {
   // (1) First, set parameters, related step size control
-  double absT   = dAbs(mT);
+  double absT   = dabs(mT);
 
   mhMin      = (absT>0) ? (absT*EPS*16.0) : EPS0;
-  mhMax      = dAbs(mTEnd-mT) / 10;
+  mhMax      = dabs(mTEnd-mT) / 10;
   mFac       = 0.8;
   mFacMin    = 0.1;
   mFacMax    = 4;
@@ -522,7 +585,7 @@ void CExpRKMethod::setInitialStepSize()
   // (2) Calculate h0
   d0 = infNorm(mDim, mY); 
   
-  mDerivFunc(&mDim, &mT, &mY, &mZ1);//mZ1 is y'(t)
+  mDerivFunc(&mDim, &mT, mY, mZ1);//mZ1 is y'(t)
   d1 = infNorm(mDim, mZ1);
 
   if ((d0<1.0e-5) || (d1<1.0e-5))
@@ -536,20 +599,20 @@ void CExpRKMethod::setInitialStepSize()
 
   double tCp = mT;
   mT += h0;
-  mDerivFunc(&mDim, &mT, &mZ3, &mZ2);// mZ2 is y'(t+h0)
+  mDerivFunc(&mDim, &mT, mZ3, mZ2);// mZ2 is y'(t+h0)
   for(size_t i=0; i<mDim; i++)
     mZ3[i] = (mZ1[i]-mZ2[i])/h0;  // mZ3 is y''(t+h0)
 
   d2 = infNorm(mDim, mZ3);
 
-  double tmp = dMax(d1, d2);
+  double tmp = dmax(d1, d2);
   if (tmp <= 1.0e-15)
-    h1 = dMax(1.0e-6, h0*1.0e-3);
+    h1 = dmax(1.0e-6, h0*1.0e-3);
   else
     h1 = pow(0.01/tmp, 1.0/(mP+1.0));
 
   // (4) Calculate h
-  h = dMax(100*h0, h1);
+  h = dmax(100*h0, h1);
 
   mT = tCp;
   return;
@@ -625,13 +688,17 @@ double CExpRKMethod::infNorm(const size_t &len, const double &y)
   return result;
 }
 
-double CExpRKMethod::dMax(const double &x1, const double &x2)
+double CExpRKMethod::dmax(const double &x1, const double &x2)
 {
   return (x1>x2)?x1:x2;
 }
 
-double CExpRKMethod::dAbs(const double &x)
+double CExpRKMethod::dmin(const double &x1, const double &x2)
+{
+  return (x1>x2)?x2:x1;
+}
+
+double CExpRKMethod::dabs(const double &x)
 {
   return (x>0)?x:(-1*x);
-
 }

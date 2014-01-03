@@ -315,6 +315,11 @@ class CExpRKMethod:
   size_t mAcceptNum;
 
   /*
+   * mRejectNum, a size_t varialbe, recording how many rejected steps
+   */
+  size_t mRejectNum;
+
+  /*
    * mfEvalNum, a size_t variable, recording how many times pDerivFunc 
    *            are called
    */
