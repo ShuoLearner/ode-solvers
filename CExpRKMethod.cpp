@@ -101,7 +101,7 @@ voidCExpRKMethod::~CExpRKMethod()
 
   if(mK)
     {
-      for(int i=mStage-1; i>=0; i--)
+      for(int i=mStage; i>=0; i--)
 	delete [] mK[i];
       
       delete [] mK;
@@ -355,8 +355,8 @@ void CExpRKMethod::doOneStep()
 	mYNew[i] += b * mK[s][i];
     }
 
-  // (4) New Yp, mZ1
-  mDerivFunc(&mDim, &mTNew, mYNew, mZ1);
+  // (4) New Yp, recording it into last row of mK
+  mDerivFunc(&mDim, &mTNew, mYNew, mK[mStage]);
 
   return;
 }
@@ -411,7 +411,7 @@ void CExpRKMethod::advanceStep()
     mY[i] = mYNew[i];
 
   for(int i=0; i<mDim; i++)
-    mK[0][i] = mZ1[i];
+    mK[0][i] = mK[mStage][i];
 
   return;
 }
@@ -488,19 +488,18 @@ void CExpRKMethod::setInitialY()
 void CExpRKMethod::setCoeff()
 {
   mP       = 4;
-  mStage   = 7;
+  mStage   = 6;
   mOrderY  = 4;
   mOrderYp = 3;
 
   //----Set mA----
-  double A[7][7] = {
-    {          0,            0,           0,         0,            0,      0, 0},
-    {       1./5,            0,           0,         0,            0,      0, 0},
-    {      3./40,        9./40,           0,         0,            0,      0, 0},
-    {     44./45,      -56./15,       32./9,         0,            0,      0, 0},
-    {19372./6561, -25360./2187, 64448./6561, -212./729,            0,      0, 0},
-    { 9017./3168,     -355./33, 46732./5247,   49./176, -5103./18656,      0, 0},
-    {    35./384,            0,   500./1113,  125./192,  -2187./6784, 11./84, 0}
+  double A[6][6] = {
+    {          0,            0,           0,         0,            0,  0},
+    {       1./5,            0,           0,         0,            0,  0},
+    {      3./40,        9./40,           0,         0,            0,  0},
+    {     44./45,      -56./15,       32./9,         0,            0,  0},
+    {19372./6561, -25360./2187, 64448./6561, -212./729,            0,  0},
+    { 9017./3168,     -355./33, 46732./5247,   49./176, -5103./18656,  0}
   };
   
   for(int r=0; r<mStage; r++)
@@ -510,12 +509,12 @@ void CExpRKMethod::setCoeff()
     }
 
   //----Set mC----
-  double C[7] = {0, 1./5, 3./10, 4./5, 8./9, 1, 1};
+  double C[6] = {0, 1./5, 3./10, 4./5, 8./9, 1};
   for(int c=0; c<mStage; c++)
     mC[c] = C[c];
 
   //----Set mB----
-  double B[7] = {35./384, 0, 500./1113, 125./192, -2187./6784, 11./84, 0};
+  double B[6] = {35./384, 0, 500./1113, 125./192, -2187./6784, 11./84};
   for(int c=0; c<mStage; c++)
     mB[c] = B[c];
 
@@ -531,14 +530,14 @@ void CExpRKMethod::setCoeff()
     {0,       3./2,         -4,        5./2}
   };
 
-  for(int r=0; r<mStage; r++)
+  for(int r=0; r<mStage+1; r++)
     {
       for(int c=0; c<mOrderY; c++)
 	mI[r][c] = I[r][c];
     }
 
   //----Set mK----
-  mK = new double*[mStage];
+  mK = new double*[mStage+1];
   for (int r=0; r<mStage; r++)
     mK[r] = new double[mDim];
 
@@ -620,7 +619,36 @@ void CExpRKMethod::setInitialStepSize()
 }
 
 
+//************************//
+// Root Finder Functions *//
+//************************//
 
+void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
+{
+  double tmp = (tInterp-mT)/mh;
+  double S[MAX_STAGE];
+
+  S[0] = tmp;
+  for(int i=1; i<mOrderY; i++)
+    S[i] = S[i-1]*tmp;
+
+  for(int d=0; d<mDim; d++)
+    {
+      yInterp[d] = mY[d];
+      
+      for(int s=0; s<mOrderY; s++)
+	{
+	  tmp = 0;
+	  
+	  for(int j=0; j<mStage+1; j++)
+	    tmp += mI[j][s] * mK[j][d];
+	    
+	  yInterp[d] += mh * tmp * S[s];
+	}
+    }
+  
+  return;
+}
 
 
 

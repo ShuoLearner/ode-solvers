@@ -182,10 +182,10 @@ class CExpRKMethod:
   double *mYNew;
 
   /*
-   * mYp, a double pointer pointing to an array recording 
-   *      derivatives
+   * mYInterp, a double pointer pointing to an array recording 
+   *           derivatives
    */
-  double *mYp;
+  double *mYInterp;
 
   /*
    * mFinish, a boolean variable, indicating whether integration has 
