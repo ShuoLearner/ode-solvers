@@ -12,6 +12,12 @@
 
 //Define function pointer of functions for computing derivative and 
 //event function
+// Parameters:
+// 1. size_t mDim
+// 2. double mT
+// 3. double mY
+// 4. size_t mRootNum
+// 5. double mRootValue
 typedef void (*pEvalR)(const size_t, const double * , const double * ,
 		       const size_t *, double * );
 
@@ -127,9 +133,17 @@ class CExpRKMethod:
    */
   pEvalR mEventFunc;
 
+
+  /*
+   * mHybrid, a boolean variable
+   * mHybrid == false, a regular ODE solver
+   * mHybrid == true,  providing inverse interpolation for hybrid method
+   */
+  bool mHybrid;
+
   
   /*
-   * mStatic, a boolin variable 
+   * mStatic, a boolean variable 
    * mStatic == 1, write statistic results into a txt file
    * mStatic == 0, do not output statistic results
    */
@@ -355,6 +369,19 @@ class CExpRKMethod:
    * mI, a two dimension double array, for interpolation 
    */
   double mI[MAX_STAGE][MAX_STAGE];
+
+  /*
+   * mRootValueOld, a double array pointer, recording root values
+   *                at previous step
+   */
+  double *mRootValueOld;
+
+  /*
+   * mRootValue, a double array pointer, recording root value at
+   *             current time mT
+   */
+  double *mRootValue;
+  
 
   /*
    * mOrderY, the order of Y interpolation can achieve

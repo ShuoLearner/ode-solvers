@@ -108,6 +108,19 @@ voidCExpRKMethod::~CExpRKMethod()
       mK = NULL;
     }
 
+  if(mRootValueOld)
+    {
+      delete [] mRootValueOld;
+      mRootValueOld = NULL;
+    }
+
+  if(mRootValue)
+    {
+      delete [] mRootValue;
+      mRootValue = NULL;
+    }
+
+
   if(mZ1)
     {
       delete [] mZ1;
@@ -151,7 +164,7 @@ void CExpRKMethod::integrate()
       //If events queue isn't empty, deal with the next event, and return
       if (!mRootQueue.empty())
 	{
-	  
+	  calculateRootState();
 	}
       else
 	advanceStep();
@@ -229,11 +242,28 @@ void CExpRKMethod::integrate()
       //~~~~~~~~~~~~~~~~~~//
       if (mHasEvent)
 	{
-
+	  size_t dim = (mHybrid)? (mDim-1) : mDim;
+	  findRoots(dim);
 	}
 
+      if (mHybrid)
+	doInverseInterpolation();
+
+      if (!mRootQueue.empty()) //has events
+	{
+	  //do sorting
+	  calculateRootState();
+	  return;
+	}
+	 
+
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      // (5) Integration Finished //
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~//
+
+
       //~~~~~~~~~~~~~~~~~~~~~~//
-      // (5) Advance New Step //
+      // (6) Advance New Step //
       //~~~~~~~~~~~~~~~~~~~~~~//
       advanceStep();
     }
@@ -413,6 +443,12 @@ void CExpRKMethod::advanceStep()
   for(int i=0; i<mDim; i++)
     mK[0][i] = mK[mStage][i];
 
+  if(mEventFunc)
+    {
+      for(int i=0; i<mRootNum; i++)
+	mRootValue[i] = mRootValueOld[i];
+    }
+
   return;
 }
 
@@ -439,7 +475,16 @@ void CExpRKMethod::initialize()
   if (!mEventFunc) //no event 
     mHasEvent = false;
   else
-    mHasEvent = true;
+    {
+      mHasEvent = true;
+      mRootValueOld = new double[mRootNum];
+      mRootValue = new double[mRootNum];
+
+      //calculate mRootValueOld
+      (*mEventFunc)(&mDim, &mT, mY, mRootNum, mRootValueOld);
+
+      mRootQueue.clear();
+    }
 
   return;
 }
@@ -650,6 +695,13 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
   return;
 }
 
+void CExpRKMethod::findRoots(const size_t dim)
+{
+  
+
+
+}
+
 
 
 //*****************************//
@@ -689,6 +741,12 @@ void CExpRKMethod::checkParameter()
   if(!mDerivFunc)
     {
       std::cout << "Function that calculates direvatives should be set!" << std::endl;
+      return;
+    }
+
+  if(mEventFunc && (mRootNum<=0))
+    {
+      std::cout << "Root Number should be an positive integer!" << std::endl;
       return;
     }
 
