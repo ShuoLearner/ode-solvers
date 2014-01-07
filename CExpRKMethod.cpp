@@ -253,7 +253,7 @@ void CExpRKMethod::integrate()
 	findRoots();
 
       if (mHybrid)
-	doInverseInterpolation();
+	findSlowReaction();
 
       if (!mRootQueue.empty()) //has events
 	{
@@ -519,20 +519,22 @@ void CExpRKMethod::setInitialY()
 
   
   // ----(2)----
+  size_t size = (mDim>mRootNum) ? mDim : mRootNum;
+  size = (size>(MAX_STAGE+2)) ? size : (MAX_STAGE+2);
   if (mZ1)
     delete [] mZ1;
   
-  mZ1 = new double[mDim];
+  mZ1 = new double[size];
 
   if (mZ2)
     delete [] mZ2;
   
-  mZ2 = new double[mDim];
+  mZ2 = new double[size];
 
   if (mZ3)
     delete [] mZ3;
   
-  mZ3 = new double[mDim];
+  mZ3 = new double[size];
 
   return;
 }
@@ -730,10 +732,13 @@ void CExpRKMethod::findRoots()
     return;
 
   // 3. Find Roots
-  int lastMoved = 0, maxIter = 100;
-  double tol;
+  int maxIter = 100;
+  double tol, delta, step;
   double tL, tR, vL, vR, tTry;
   SRoot root;
+
+  double *rArray = &mZ2;
+  double *yTry = &mZ1;
 
   tol = dmax(deps(mT), deps(mTNew)) * 128;
   tol = dmin(tol, dabs(mTNew-mT));
@@ -749,31 +754,105 @@ void CExpRKMethod::findRoots()
       vL = mTimeRange[r].vLeft;
       vR = mTimeRange[r].vRight;
       
-      tTry = tR;
-      lastMoved = 0;
-      
-      // (2) Regula Falsi Iteration
+      // (2) Regula Falsi Iteration 
       for(int i=0; i<maxIter; i++)
 	{
 	  // Find Root
-	  if (dabs(tR-tL)<tol)
+	  bool findRoot = true;
+	  delta = tR - tL;
+	  if ((dabs(delta)<tol) || (vL == 0.0))
+	    root.t = tL;
+	  else if(vR == 0.0)
+	    root.t  = tR;
+	  else
+	    findRoot = false;
+
+	  if(findRoot)
 	    {
 	      root.id = r;
-	      root.t  = tL;
 	      mRootQueue.push_back(root);
 	      break;
 	    }
-
+	 
+	  // Go Next Step
+	  step = -vL/(vR-vL) * delta;
+	  step = dmax(0.5*tol, dmin(step, delta-0.5*tol));
+	  tTry = tLeft + step;
+	
+	  interpolation(tTry, yTry);
+	  (*mEventFunc)(&mDim, &tTry, yTry, &mRootNum, rArray);
 	  
+	  // Update root r
+	  if(rArray[r]*vL >=0) // same sign as vL
+	    {
+	      mTimeRange[r].tLeft = tTry;
+	      mTimeRange[r].vLeft = rArray[r];
+	    }
+	  else
+	    {
+	      mTimeRange[r].tRight = tTry;
+	      mTimeRange[r].vRight = rArray[r];
+	    }
 
-	}
+	  // Update Other root information
+	  for(int j=r+1; j<mRootNum; j++)
+	    {
+	      if(mTimeRange[j].inRange && (tTry>mTimeRange[j].tLeft) && (tTry<mTimeRange[j].tRight))
+		{
+		  if(mTimeRange[j].vLeft*rArray[j]>=0)
+		    {
+		      mTimeRange[j].tLeft = tTry;
+		      mTimeRange[j].vLeft = rArray[j];
+		    }
+		  else
+		    {
+		      mTimeRange[j].tRight = tTry;
+		      mTimeRange[j].vRight = rArray[j];
+		    }
+		}
+	    }// end update root information
 
-
+	}// for one root
     }
 
   return;
+}
+
+
+void CExpRKMethod::findSlowReaction()
+{
+  // Check slow reactin existance
+  if (mY[mDim-1]*mYNew[mDim-1]>0)//now slow reaction
+    return;
+
+  double *tArray = &mZ1;
+  double *yArray = &mZ2;
+  double *yInter = &mZ3;
+  size_t cnt = 1;
+
+  // Record t and y
+  tArray[0] = mT;
+  yArray[0] = mY[mDim-1];
+  for (int i=1; i<=mStage; i++)
+    {
+      if (mC[i]>0 && mC[i]<1)
+	{
+	  tArray[cnt] = mT + mC[i]*mh;
+	  interpolation(tArray[cnt], yInter);
+	  yArray[cnt] = yInter[mDim-1];
+	  cnt++;
+	}
+    }
+  tArray[cnt] = mTNew;
+  yArray[cnt] = mYNew[mDim-1];
+  cnt++;
+
+  // Do Inverse Interpolation
+  
+
 
 }
+
 
 
 
