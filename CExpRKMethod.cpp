@@ -53,9 +53,12 @@ void CExpRKMethod::CExpRKMethod()
   mODEStateRecord = 0;
 
   // Default root finder related
-  mRootNum = 0;
+  mRootNum      = 0;
   mRootQueue.resize(0);
-  mState = NULL;
+  mState        = NULL;
+  mTimeRange    = NULL;
+  mRootValue    = NULL;
+  mRootValueOld = NULL;
 
   // Default statistic variables
   mStepNum   = 0;
@@ -118,6 +121,12 @@ voidCExpRKMethod::~CExpRKMethod()
     {
       delete [] mRootValue;
       mRootValue = NULL;
+    }
+
+  if(mTimeRange)
+    {
+      delete [] mTimeRange;
+      mTimeRange = NULL;
     }
 
 
@@ -241,10 +250,7 @@ void CExpRKMethod::integrate()
       // (4) Check Events //
       //~~~~~~~~~~~~~~~~~~//
       if (mHasEvent)
-	{
-	  size_t dim = (mHybrid)? (mDim-1) : mDim;
-	  findRoots(dim);
-	}
+	findRoots();
 
       if (mHybrid)
 	doInverseInterpolation();
@@ -483,7 +489,9 @@ void CExpRKMethod::initialize()
       //calculate mRootValueOld
       (*mEventFunc)(&mDim, &mT, mY, mRootNum, mRootValueOld);
 
-      mRootQueue.clear();
+      mRootQueue.resize(0);
+
+      mTimeRange = new SRange[mRootNum];
     }
 
   return;
@@ -695,10 +703,75 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
   return;
 }
 
-void CExpRKMethod::findRoots(const size_t dim)
+void CExpRKMethod::findRoots()
 {
-  
+  // 1. Calculate New Root Value for mRootValue
+  (*mEventFunc)(&mDim, &mT, mY, &mRootNum, mRootValue);
 
+  // 2. Check Sign Change
+  bool hasEvent = false;
+  for (int i=0; i<mRootNum; i++)
+    {
+      if (mRootValue[i]*mRootValueOld[i] <= 0)
+	{
+	  mTimeRange[i].inRange = true;
+	  mTimeRange[i].tLeft   = mT;
+	  mTimeRange[i].tRight  = mTNew;
+	  mTimeRange[i].vLeft   = mRootValueOld[i];
+	  mTimeRange[i].vRight  = mRootValue[i];
+
+	  hasEvent = true;
+	}
+      else
+	mTimeRange[i].inRange = false;
+    }
+
+  if (!hasEvent)
+    return;
+
+  // 3. Find Roots
+  int lastMoved = 0, maxIter = 100;
+  double tol;
+  double tL, tR, vL, vR, tTry;
+  SRoot root;
+
+  tol = dmax(deps(mT), deps(mTNew)) * 128;
+  tol = dmin(tol, dabs(mTNew-mT));
+
+  for (int r=0; r<mRootNum; r++)
+    {
+      if (!mTimeRange[r].inRange)
+	continue;
+
+      // (1) Set Initial Value
+      tL = mTimeRange[r].tLeft;
+      tR = mTimeRange[r].tRight;
+      vL = mTimeRange[r].vLeft;
+      vR = mTimeRange[r].vRight;
+      
+      tTry = tR;
+      lastMoved = 0;
+      
+      // (2) Regula Falsi Iteration
+      for(int i=0; i<maxIter; i++)
+	{
+	  // Find Root
+	  if (dabs(tR-tL)<tol)
+	    {
+	      root.id = r;
+	      root.t  = tL;
+	      mRootQueue.push_back(root);
+	      break;
+	    }
+
+	  
+
+	}
+
+
+    }
+
+  return;
 
 }
 
@@ -787,4 +860,9 @@ double CExpRKMethod::dmin(const double &x1, const double &x2)
 double CExpRKMethod::dabs(const double &x)
 {
   return (x>0)?x:(-1*x);
+}
+
+double CExpRKMethod::deps(const double &x)
+{
+  return (x==0)? EPS0 : dabs(x)*EPS;
 }

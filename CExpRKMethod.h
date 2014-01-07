@@ -37,7 +37,14 @@ struct SRoot
   double t;
 };
 
-
+struct SRange
+{
+  bool inRange;
+  double vLeft;
+  double vRight;
+  double tLeft;
+  double tRight;
+}
 
 class CExpRKMethod:
 {
@@ -392,6 +399,12 @@ class CExpRKMethod:
    * mOrderYp, the order of Y prime interpolation can achieve
    */
   size_t mOrderYp;
+
+
+  /*
+   * mTimeRange
+   */
+  SRange *mTimeRange;
 
 
   
