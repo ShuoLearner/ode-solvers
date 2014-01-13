@@ -22,6 +22,9 @@
 void deriv(const double *, const double *,
 	   double *);
 
+void event(const double *, const double *,
+	   const size_t *, double *);
+
 
 int main()
 {
@@ -30,26 +33,54 @@ int main()
   
   ode45.mDim = 3;
   ode45.mY   = y;
+  ode45.mRootNum   = 3;
   ode45.mDerivFunc = &deriv;
+  ode45.mEventFunc = &event;
   ode45.mHybrid    = false;
   ode45.mODEState  = 0;
-  //ode45.mAbsTol    = 1e-8;
-  //ode45.mRelTol    = 1e-6;
+  
 
-  for(int i=0; i<10; i++)
+  ode45.mT    = 0;
+  ode45.mTEnd = 300;
+  while(1)
     {
-      ode45.mT    = i*10;
-      ode45.mTEnd = (i+1)*10;
-      
       ode45.integrate();
-      if(ode45.mODEState == 4)
+      if(ode45.mODEState == 3)
 	{
-	  ode45.mODEState = 1;
+	  if ((ode45.mRootId == 0) || (ode45.mRootId == 1))
+	    {
+	      ode45.mODEState = 2;
+	      std::cout << "Root ID = 0" << std::endl;
+	      std::cout << "t: " << ode45.mT << " ";
+	      for (int j=0; j<ode45.mDim; ++j)
+		std::cout << y[j] << " ";
+	    
+	      std::cout << std::endl;
+	    }
+
+	  else if(ode45.mRootId == 2)
+	    {
+	      std::cout << "Root ID = 1" << std::endl;
+	      std::cout << "t: " << ode45.mT << " ";
+	      for (int j=0; j<ode45.mDim; ++j)
+		std::cout << y[j] << " ";
+	    
+	      std::cout << std::endl;
+
+	      y[0] = 0;  y[1] = 200; y[2] = 0;
+	      ode45.mODEState = 1;
+	    }
+
+	}
+      else if(ode45.mODEState == 4)
+	{
+	  std::cout << "Finish Integration!" << std::endl;
 	  std::cout << "t: " << ode45.mT << " ";
 	  for (int j=0; j<ode45.mDim; ++j)
 	    std::cout << y[j] << " ";
 	    
 	  std::cout << std::endl;
+	  break;
 	}
     }
 
@@ -66,5 +97,15 @@ void deriv(const double *t, const double *y,
   yp[1] =  k1*y1 - (k2+k3)*y2;
   yp[2] =  k3*y2;
 
+  return;
+}
+
+
+void event(const double *t,  const double *y,
+	   const size_t *rn, double *rv)
+{
+  rv[0] = y[0] - 30;
+  rv[1] = y[0] - 30 - 1e-8;
+  rv[2] = y[2] - 30;
   return;
 }

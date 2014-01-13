@@ -161,12 +161,8 @@ void CExpRKMethod::integrate()
       allocateSpace();
       setInitialStepSize();
       mDerivFunc(&mT, mY, mK[0]);//record derivative to mK
-      
-      for(int i=0; i<mDim; i++)
-	std::cout << mK[0][i] << " ";
-      std::cout << std::endl;
 
-      std::cout << "Finish ODEState==1" << std::endl;
+      //std::cout << "Finish ODEState==1" << std::endl;
     }
   else if (mODEState == 3) // has event
     {
@@ -187,10 +183,8 @@ void CExpRKMethod::integrate()
   //=============//
   // 2 Main Loop //
   //=============//
-  std::cout << "Going into Main Loop" << std::endl;
   while(!mFinish)
-    {
-      
+    {      
       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
       // (1) Check Whether mT is close to mTEnd //
       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
@@ -213,20 +207,17 @@ void CExpRKMethod::integrate()
 	{
 	  // (i) Do One Single Step
 	  doOneStep();
-	  std::cout << "Success One Step, doOneStep()" << std::endl;
  
 	  // (ii) Update Statistic Record
 	  mfEvalNum += mStage;
 	  
-	  
 	  // (iii) Estimate Error
 	  double error = estimateError();
-	  std::cout << "Get Error: " << error << std::endl;
+	  //std::cout << "Get Error: " << error << std::endl;
 
 	  //(iv) Update step size mh
 	  if (error > 1.0) // Step Rejected
 	    {
-	      std::cout << "Step Filled..." << std::endl;
 	      mhNoFailed = false;
 	      mRejectNum++;
 	      mh *= 0.5; // Use half step size h
@@ -241,10 +232,13 @@ void CExpRKMethod::integrate()
 	    }
 	  else // Step Accept
 	    {
-	      std::cout << "Step Accepted" << std::endl;
-	      mAcceptNum++;
-	      double fac = pow(1/error, 1/(mP+1));
 
+	      mhMin = deps(mTNew) * 16.0;
+
+	      //std::cout << "Step Accepted" << std::endl;
+	      mAcceptNum++;
+	      
+	      double fac = pow(1/error, 1.0/(mP+1.0));
 	      if (!mhNoFailed) //previous step is rejected
 		mh *= dmin(mFacMaxRej, dmax(mFacMin, mFac*fac));
 	      else
@@ -278,6 +272,7 @@ void CExpRKMethod::integrate()
       if(mFinish)
 	{
 	  mODEState = 4;
+	  mT = mTEnd;
 	  for(int i=0; i<mDim; i++)
 	    mY[i] = mYNew[i];
 
@@ -288,8 +283,8 @@ void CExpRKMethod::integrate()
       // (6) Advance New Step //
       //~~~~~~~~~~~~~~~~~~~~~~//
       advanceStep();
-      std::cout << "Advance Step" << std::endl;
-      getchar();
+      
+      //getchar();
     }
 
   return;
@@ -370,10 +365,11 @@ void CExpRKMethod::checkODEState()
  */
 void CExpRKMethod::doOneStep()
 {
+  double t;
   // (1) Calculate mK[1] to mK[mStage-1]
   for(int s=1; s<mStage; s++)
     {
-      mTmpT = mT + mh*mC[s];//tmp time
+      t = mT + mh*mC[s];//tmp time
 
       for(int i=0; i<mDim; i++)// tmp Y
 	mZ1[i] = mY[i];
@@ -385,9 +381,8 @@ void CExpRKMethod::doOneStep()
 	    mZ1[i] += mK[i][j] * a;
 	}
 
-      mDerivFunc(&mTmpT, mZ1, mK[s]);
+      mDerivFunc(&t, mZ1, mK[s]);
     }
-  std::cout << "Get mK" << std::endl;
 
 
   // (2) New Time, mTNew
@@ -399,25 +394,21 @@ void CExpRKMethod::doOneStep()
       mTNew = mTEnd;
       mh = mTEnd - mT;
     }
-  std::cout << "Calculated mTNew" << std::endl;
   
   // (3) New Y, mYNew
   for(int i=0; i<mDim; i++)
     mYNew[i] = mY[i];
   
-  std::cout << "mh" << mh << std::endl;
+  //std::cout << "mT = " << mT << ", mh = " << mh << std::endl;
   for(int s=0; s<mStage; s++)
     {
       double b = mB[s] * mh;
-      std::cout << "b " << b << std::endl;
       for (int i=0; i<mDim; i++)
 	mYNew[i] += b * mK[s][i];
     }
-  std::cout << "Have mYNew" << std::endl;
 
   // (4) New Yp, recording it into last row of mK
   mDerivFunc(&mTNew, mYNew, mK[mStage]);
-  std::cout << "Get new yp" << std::endl;
 
   return;
 }
@@ -434,7 +425,7 @@ double CExpRKMethod::estimateError()
   for (int i=0; i<mDim; i++)
     mZ2[i] = 0;
 
-  for(int s=0; s<mStage; s++)
+  for(int s=0; s<mStage+1; s++)
     {
       double e = mE[s] * mh;
       for(int i=0; i<mDim; i++)
@@ -444,10 +435,7 @@ double CExpRKMethod::estimateError()
 
   // (2) Calculate Standard sc=Atol + max(|y|,|ynew|)*Rtol
   for(int i=0; i<mDim; i++)
-    {
-      mZ3[i] = mAbsTol + dmax(dabs(mY[i]), dabs(mYNew[i]))*mRelTol;
-      std::cout << mZ3[i] << std::endl;
-    }
+    mZ3[i] = mAbsTol + dmax(dabs(mY[i]), dabs(mYNew[i]))*mRelTol;
 
   
   // (3) Calculate Error
@@ -455,7 +443,6 @@ double CExpRKMethod::estimateError()
   for (int i=0; i<mDim; i++)
     {
       tmp = mZ2[i]/mZ3[i];
-      std::cout << tmp << std::endl;
       error += tmp*tmp;
     }
 
@@ -484,15 +471,6 @@ void CExpRKMethod::advanceStep()
       for(int i=0; i<mRootNum; i++)
 	mRootValue[i] = mRootValueOld[i];
     }
-
-  std::cout << "mT = " << mT << std::endl;
-  std::cout << "mY = " << std::endl;
-  for(int i=0; i<mDim; i++)
-    {
-      std::cout << mY[i] << std::endl;
-    }
-
-
 
   return;
 }
@@ -594,7 +572,7 @@ void CExpRKMethod::setCoeff()
     }
 
   //----Set mC----
-  double C[6] = {0, 1./5, 3./10, 4./5, 8./9, 1};
+  double C[6] = {0, 1./5, 3./10, 4./5, 8./9, 1.};
   for(int c=0; c<mStage; c++)
     mC[c] = C[c];
 
@@ -603,6 +581,10 @@ void CExpRKMethod::setCoeff()
   for(int c=0; c<mStage; c++)
     mB[c] = B[c];
 
+  //----Set mE----
+  double E[7] = {71./57600, 0, -71./16695, 71./1920, -17253./339200, 22./525, -1./40};
+    for(int c=0; c<mStage+1; c++)
+    mE[c] = E[c];
 
   //----Set mI----
   double I[7][4] = {
@@ -657,7 +639,7 @@ void CExpRKMethod::setInitialStepSize()
   // (1) First, set parameters, related step size control
   double absT   = dabs(mT);
 
-  mhMin      = (absT>0) ? (absT*EPS*16.0) : EPS0;
+  mhMin      = 16.0 * deps(mT);
   mhMax      = dabs(mTEnd-mT) / 10;
   mFac       = 0.8;
   mFacMin    = 0.1;
@@ -696,7 +678,7 @@ void CExpRKMethod::setInitialStepSize()
     h1 = pow(0.01/tmp, 1.0/(mP+1.0));
 
   // (4) Calculate h
-  mh = dmax(100*h0, h1);
+  mh = dmin(100*h0, h1);
 
   mT = tCp;
   return;
@@ -761,6 +743,8 @@ void CExpRKMethod::findRoots()
   if (!hasEvent)
     return;
 
+  std::cout << "Find root Here" << std::endl;
+  
   // 3. Find Roots
   int maxIter = 100;
   double tol, delta, step;

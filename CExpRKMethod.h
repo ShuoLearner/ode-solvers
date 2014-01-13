@@ -469,7 +469,6 @@ class CExpRKMethod
   //* Some Other Attributs *//
   //************************//
   double *mZ1, *mZ2, *mZ3;
-  double mTmpT;
 };
 
 
