@@ -13,21 +13,19 @@
 //Define function pointer of functions for computing derivative and 
 //event function
 // Parameters:
-// 1. size_t mDim
-// 2. double mT
-// 3. double mY
-// 4. size_t mRootNum
-// 5. double mRootValue
-typedef void (*pEvalR)(const size_t, const double * , const double * ,
+// 1. double mT
+// 2. double mY
+// 3. size_t mRootNum
+// 4. double mRootValue
+typedef void (*pEvalR)(const double * , const double * ,
 		       const size_t *, double * );
 
 //Need static?
 // Parameters:
-// 1. size_t mDim
-// 2. double mT
-// 3. double mY
-// 4. double Yp
-typedef void (*pEvalF)(const size_t *, const double *, 
+// 1. double mT
+// 2. double mY
+// 3. double Yp
+typedef void (*pEvalF)(const double *, 
 		       const double *, double * );
 
 
@@ -44,9 +42,9 @@ struct SRange
   double vRight;
   double tLeft;
   double tRight;
-}
+};
 
-class CExpRKMethod:
+class CExpRKMethod
 {
   /*============Functions============*/
  public:
@@ -71,6 +69,19 @@ class CExpRKMethod:
   void integrate();
 
 
+  void checkODEState();
+
+
+  void doOneStep();
+
+  
+  double estimateError();
+
+
+  void advanceStep();
+
+
+
 
   //***************************************//
   //* Functions for System Initialization *//
@@ -78,17 +89,64 @@ class CExpRKMethod:
   void initialize();
 
 
+  void allocateSpace();
+
+
+  void setCoeff();
+
+
+  void setStatRecord();
+
+
 
   //***********************************//
   //* Functions for step size control *//
   //***********************************//
 
-
+  void setInitialStepSize();
 
 
   //*****************************//
   //* Function for Root Finder  *//
   //*****************************//
+
+  void interpolation(const double, double *);
+
+
+  void findRoots();
+
+
+  void findSlowReaction();
+
+
+  void calculateRootState();
+
+  //*****************************//
+  //* Parameters Check Function *//
+  //*****************************//
+
+  void checkParameter();
+
+
+  //***************************//
+  //* Other Helpful Functions *//
+  //***************************//
+  double infNorm(const size_t &, const double*);
+
+
+  double dmax(const double&, const double&);
+
+
+  double dmin(const double&, const double&);
+
+
+  double dabs(const double&);
+
+
+  double deps(const double&);
+
+
+  void clearQueue(std::queue<SRoot> &qRoot);
 
 
   /*============Attributes============*/
@@ -97,11 +155,18 @@ class CExpRKMethod:
   //* Attributs that should be set by users *//
   //*****************************************//
  public:
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //~~~~~~~~Input Parameters~~~~~~~~
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   /*
    * mDim, dimension of this problem
    */
   size_t mDim;
 
+  /*
+   * mRootNum, a size_t variable, number of roots
+   */
+  size_t mRootNum;
 
   /*
    * mAbsTol, absolute error tolerance 
@@ -111,32 +176,19 @@ class CExpRKMethod:
   double mRelTol;
 
   /*
-   * mT, current time
-   */
-  double mT;
-
-
-  /*
    * mTEnd, terminal time this solver will reach
    */
   double mTEnd;
-  
-  /*
-   * mInitY, a vector to store the initial value of system
-   *         Before use, user should clean it
-   */ 
-  std::vector<double> mInitY;
 
   /*
    * mDerivFunc, function pointer of function calculating
-   *    derivatives
+   *             derivatives
    */
   pEvalF mDerivFunc;
 
-
   /*
    * mEventFunc, function pointer of function calculating
-   *    event values
+   *             event values
    */
   pEvalR mEventFunc;
 
@@ -156,6 +208,30 @@ class CExpRKMethod:
    */
   bool mStatis;
 
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //~~~~~~~~Output Parameters~~~~~~~~~
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  /*
+   * mRootId, a size_t variable indicating which root is found
+   *          0 <= mRootId <= mRootNum-1
+   */
+  size_t mRootId;
+
+
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //~~~~~~~~Input and Output Parameters~~~~~~~~
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  /*
+   * mT, current time
+   */
+  double mT;
+
+   /*
+   * mY, a double pointer pointing to an array recording 
+   *     system values at privous step
+   */
+  double *mY;
+
   /*
    * mODEState, an int varialbe, recording the state of the solver
    * Input:
@@ -170,6 +246,7 @@ class CExpRKMethod:
    *   mODEState == 4, ODE solver finishes integration at t == tEnd;
    */
   int mODEState;
+
 
   
  private:
@@ -189,12 +266,6 @@ class CExpRKMethod:
    * mTNew, new time in the next step
    */
   double mTNew;
-
-   /*
-   * mY, a double pointer pointing to an array recording 
-   *     system values at privous step
-   */
-  double *mY;
 
   /*
    * mYNew, a double pointer pointing to an array recording
@@ -350,12 +421,6 @@ class CExpRKMethod:
   //* Variables for Root Finding functions   *//
   //******************************************//
 
- public:
-  /*
-   * mRootNum, a size_t variable, number of roots
-   */
-  size_t mRootNum;
-
  private:
   /*
    * mRootQueue, a queue of struct SRoot, which recording
@@ -363,14 +428,6 @@ class CExpRKMethod:
    * order
    */
   std::queue<SRoot> mRootQueue;
-
-  /*
-   * mState, a double array pointer, recording the state 
-   *        of the system
-   *        mState[0] = t;
-   *        mState[1] ~ mState[dim] = y
-   */
-  double *mState;
 
   /*
    * mI, a two dimension double array, for interpolation 

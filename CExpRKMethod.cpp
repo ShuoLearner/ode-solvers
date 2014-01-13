@@ -1,5 +1,8 @@
 #include "CExpRKMethod.h"
+#include <algorithm>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 
 //*********************************//
@@ -9,7 +12,7 @@
 /*
  * Default Constructor
  */
-void CExpRKMethod::CExpRKMethod()
+CExpRKMethod::CExpRKMethod()
 {
   // Default error tolerances
   mAbsTol = 1e-12;
@@ -27,7 +30,6 @@ void CExpRKMethod::CExpRKMethod()
   mY      = NULL;
   mYNew   = NULL;
   mK      = NULL;
-  mYp     = NULL;
   mFinish = false;
 
   // Default coefficients
@@ -53,12 +55,13 @@ void CExpRKMethod::CExpRKMethod()
   mODEStateRecord = 0;
 
   // Default root finder related
+  mRootId       = -1;
   mRootNum      = 0;
-  mRootQueue.resize(0);
-  mState        = NULL;
   mTimeRange    = NULL;
   mRootValue    = NULL;
   mRootValueOld = NULL;
+
+  clearQueue(mRootQueue);
 
   // Default statistic variables
   mStepNum   = 0;
@@ -71,12 +74,14 @@ void CExpRKMethod::CExpRKMethod()
   mZ1 = NULL;
   mZ2 = NULL;
   mZ3 = NULL;
+
+  std::cout << "Finish Constructur" << std::endl;
 }
 
 /*
  * Default Destructor
  */
-voidCExpRKMethod::~CExpRKMethod()
+CExpRKMethod::~CExpRKMethod()
 {
   if (mDerivFunc)
     mDerivFunc = NULL;
@@ -84,22 +89,10 @@ voidCExpRKMethod::~CExpRKMethod()
   if (mEventFunc)
     mEventFunc = NULL;
 
-  if (mY)
-    {
-      delete [] mY;
-      mY = NULL;
-    }
-
   if (mYNew)
     {
       delete [] mYNew;
       mYNew = NULL;
-    }
-
-  if (mYp)
-    {
-      delete [] mYp;
-      mYp = NULL;
     }
 
   if(mK)
@@ -161,19 +154,29 @@ void CExpRKMethod::integrate()
   // 1 check mODEstate  //
   //====================//
   checkODEState();
+  std::cout << "After ODEState Check" << std::endl;
   if(mODEState == 1)//Restart
     {
       mFinish = false;
-      setInitialY();
+      allocateSpace();
       setInitialStepSize();
-      mDerivFunc(&mDim, &mT, mY, mK[0]);//record derivative to mK
+      mDerivFunc(&mT, mY, mK[0]);//record derivative to mK
+      
+      for(int i=0; i<mDim; i++)
+	std::cout << mK[0][i] << " ";
+      std::cout << std::endl;
+
+      std::cout << "Finish ODEState==1" << std::endl;
     }
   else if (mODEState == 3) // has event
     {
+      std::cout << "In State mODEState == 3" << std::endl;
       //If events queue isn't empty, deal with the next event, and return
       if (!mRootQueue.empty())
 	{
+	  std::cout << "Still has root" << std::endl;
 	  calculateRootState();
+	  return;
 	}
       else
 	advanceStep();
@@ -184,6 +187,7 @@ void CExpRKMethod::integrate()
   //=============//
   // 2 Main Loop //
   //=============//
+  std::cout << "Going into Main Loop" << std::endl;
   while(!mFinish)
     {
       
@@ -194,12 +198,13 @@ void CExpRKMethod::integrate()
 	{
 	  mh = mTEnd - mT;
 	  mFinish = true;
+	  std::cout << "mT is close to mTEnd" << std::endl;
 	}
 
       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
       // (2) Set Some Parameters before One Step //
       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
-      mhNoFaild = true;      
+      mhNoFailed = true;      
 
       //~~~~~~~~~~~~~~~~~~~~~~~//
       // (3) Continue One Step //
@@ -208,17 +213,20 @@ void CExpRKMethod::integrate()
 	{
 	  // (i) Do One Single Step
 	  doOneStep();
-	  
+	  std::cout << "Success One Step, doOneStep()" << std::endl;
+ 
 	  // (ii) Update Statistic Record
 	  mfEvalNum += mStage;
 	  
 	  
 	  // (iii) Estimate Error
 	  double error = estimateError();
+	  std::cout << "Get Error: " << error << std::endl;
 
 	  //(iv) Update step size mh
 	  if (error > 1.0) // Step Rejected
 	    {
+	      std::cout << "Step Filled..." << std::endl;
 	      mhNoFailed = false;
 	      mRejectNum++;
 	      mh *= 0.5; // Use half step size h
@@ -233,6 +241,7 @@ void CExpRKMethod::integrate()
 	    }
 	  else // Step Accept
 	    {
+	      std::cout << "Step Accepted" << std::endl;
 	      mAcceptNum++;
 	      double fac = pow(1/error, 1/(mP+1));
 
@@ -266,12 +275,21 @@ void CExpRKMethod::integrate()
       //~~~~~~~~~~~~~~~~~~~~~~~~~~//
       // (5) Integration Finished //
       //~~~~~~~~~~~~~~~~~~~~~~~~~~//
+      if(mFinish)
+	{
+	  mODEState = 4;
+	  for(int i=0; i<mDim; i++)
+	    mY[i] = mYNew[i];
 
+	  return;
+	}
 
       //~~~~~~~~~~~~~~~~~~~~~~//
       // (6) Advance New Step //
       //~~~~~~~~~~~~~~~~~~~~~~//
       advanceStep();
+      std::cout << "Advance Step" << std::endl;
+      getchar();
     }
 
   return;
@@ -316,7 +334,7 @@ void CExpRKMethod::checkODEState()
   else if(mODEState == 2)
     {
       //Deal with errors 
-      if (mODESateRecord != 3) 
+      if (mODEStateRecord != 3) 
 	{
 	  if (mODEStateRecord == -2)
 	    std::cout << "Errors happen when continuing integration. Parameters should be check!" << std::endl;
@@ -367,32 +385,39 @@ void CExpRKMethod::doOneStep()
 	    mZ1[i] += mK[i][j] * a;
 	}
 
-      mDerivFunc(&mDim, &mTmpT, mZ1, mK[s]);
+      mDerivFunc(&mTmpT, mZ1, mK[s]);
     }
+  std::cout << "Get mK" << std::endl;
+
 
   // (2) New Time, mTNew
   size_t s = mStage-1;
-  mTNew = mT + mh*c[s];
+  mTNew = mT + mh;
 
   if(mFinish)
     {
       mTNew = mTEnd;
-      h = mTEnd - mT;
+      mh = mTEnd - mT;
     }
-
+  std::cout << "Calculated mTNew" << std::endl;
+  
   // (3) New Y, mYNew
   for(int i=0; i<mDim; i++)
     mYNew[i] = mY[i];
   
-  for (int s=0; s<mStage; s++)
+  std::cout << "mh" << mh << std::endl;
+  for(int s=0; s<mStage; s++)
     {
       double b = mB[s] * mh;
+      std::cout << "b " << b << std::endl;
       for (int i=0; i<mDim; i++)
 	mYNew[i] += b * mK[s][i];
     }
+  std::cout << "Have mYNew" << std::endl;
 
   // (4) New Yp, recording it into last row of mK
-  mDerivFunc(&mDim, &mTNew, mYNew, mK[mStage]);
+  mDerivFunc(&mTNew, mYNew, mK[mStage]);
+  std::cout << "Get new yp" << std::endl;
 
   return;
 }
@@ -419,7 +444,10 @@ double CExpRKMethod::estimateError()
 
   // (2) Calculate Standard sc=Atol + max(|y|,|ynew|)*Rtol
   for(int i=0; i<mDim; i++)
-    mZ3[i] = mAbsTol + dmax(dabs(mY[i]), dabs(mYNew[i]))*mRelTol;
+    {
+      mZ3[i] = mAbsTol + dmax(dabs(mY[i]), dabs(mYNew[i]))*mRelTol;
+      std::cout << mZ3[i] << std::endl;
+    }
 
   
   // (3) Calculate Error
@@ -427,8 +455,10 @@ double CExpRKMethod::estimateError()
   for (int i=0; i<mDim; i++)
     {
       tmp = mZ2[i]/mZ3[i];
+      std::cout << tmp << std::endl;
       error += tmp*tmp;
     }
+
   error = sqrt(error/mDim);
 
   return error;
@@ -455,6 +485,15 @@ void CExpRKMethod::advanceStep()
 	mRootValue[i] = mRootValueOld[i];
     }
 
+  std::cout << "mT = " << mT << std::endl;
+  std::cout << "mY = " << std::endl;
+  for(int i=0; i<mDim; i++)
+    {
+      std::cout << mY[i] << std::endl;
+    }
+
+
+
   return;
 }
 
@@ -479,17 +518,20 @@ void CExpRKMethod::initialize()
   mODEState = 1;
 
   if (!mEventFunc) //no event 
-    mHasEvent = false;
+    {
+      mHasEvent = false;
+      mRootNum = 0;
+    }
   else
     {
-      mHasEvent = true;
+      mHasEvent     = true;
       mRootValueOld = new double[mRootNum];
-      mRootValue = new double[mRootNum];
+      mRootValue    = new double[mRootNum];
 
       //calculate mRootValueOld
-      (*mEventFunc)(&mDim, &mT, mY, mRootNum, mRootValueOld);
+      (*mEventFunc)(&mT, mY, &mRootNum, mRootValueOld);
 
-      mRootQueue.resize(0);
+      clearQueue(mRootQueue);
 
       mTimeRange = new SRange[mRootNum];
     }
@@ -498,26 +540,14 @@ void CExpRKMethod::initialize()
 }
 
 
-void CExpRKMethod::setInitialY()
-{
+void CExpRKMethod::allocateSpace()
+{  
   // ----(1)----
-  if (mY)
-    delete [] mY;
+  if(mYNew)
+    delete [] mYNew;
 
-  mY = new double[mDim];
- 
-  std::vector<double>::iterator it = mInitY.begin();
-  const std::vector<double>::iterator itEnd = mInitY.end();
+  mYNew = new double[mDim];
 
-  for (int i=0; it<itEnd; it++, i++)
-      mY[i] = *it;
-
-  if (mYp)
-    delete [] mYp;
-
-  mYp = new double[mDim];
-
-  
   // ----(2)----
   size_t size = (mDim>mRootNum) ? mDim : mRootNum;
   size = (size>(MAX_STAGE+2)) ? size : (MAX_STAGE+2);
@@ -593,7 +623,7 @@ void CExpRKMethod::setCoeff()
 
   //----Set mK----
   mK = new double*[mStage+1];
-  for (int r=0; r<mStage; r++)
+  for (int r=0; r<mStage+1; r++)
     mK[r] = new double[mDim];
 
 
@@ -639,7 +669,7 @@ void CExpRKMethod::setInitialStepSize()
   // (2) Calculate h0
   d0 = infNorm(mDim, mY); 
   
-  mDerivFunc(&mDim, &mT, mY, mZ1);//mZ1 is y'(t)
+  mDerivFunc(&mT, mY, mZ1);//mZ1 is y'(t)
   d1 = infNorm(mDim, mZ1);
 
   if ((d0<1.0e-5) || (d1<1.0e-5))
@@ -653,7 +683,7 @@ void CExpRKMethod::setInitialStepSize()
 
   double tCp = mT;
   mT += h0;
-  mDerivFunc(&mDim, &mT, mZ3, mZ2);// mZ2 is y'(t+h0)
+  mDerivFunc(&mT, mZ3, mZ2);// mZ2 is y'(t+h0)
   for(size_t i=0; i<mDim; i++)
     mZ3[i] = (mZ1[i]-mZ2[i])/h0;  // mZ3 is y''(t+h0)
 
@@ -666,7 +696,7 @@ void CExpRKMethod::setInitialStepSize()
     h1 = pow(0.01/tmp, 1.0/(mP+1.0));
 
   // (4) Calculate h
-  h = dmax(100*h0, h1);
+  mh = dmax(100*h0, h1);
 
   mT = tCp;
   return;
@@ -708,7 +738,7 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
 void CExpRKMethod::findRoots()
 {
   // 1. Calculate New Root Value for mRootValue
-  (*mEventFunc)(&mDim, &mT, mY, &mRootNum, mRootValue);
+  (*mEventFunc)(&mT, mY, &mRootNum, mRootValue);
 
   // 2. Check Sign Change
   bool hasEvent = false;
@@ -737,8 +767,8 @@ void CExpRKMethod::findRoots()
   double tL, tR, vL, vR, tTry;
   SRoot root;
 
-  double *rArray = &mZ2;
-  double *yTry = &mZ1;
+  double *rArray = mZ2;
+  double *yTry = mZ1;
 
   tol = dmax(deps(mT), deps(mTNew)) * 128;
   tol = dmin(tol, dabs(mTNew-mT));
@@ -770,17 +800,17 @@ void CExpRKMethod::findRoots()
 	  if(findRoot)
 	    {
 	      root.id = r;
-	      mRootQueue.push_back(root);
+	      mRootQueue.push(root);
 	      break;
 	    }
 	 
 	  // Go Next Step
 	  step = -vL/(vR-vL) * delta;
 	  step = dmax(0.5*tol, dmin(step, delta-0.5*tol));
-	  tTry = tLeft + step;
+	  tTry = tL + step;
 	
 	  interpolation(tTry, yTry);
-	  (*mEventFunc)(&mDim, &tTry, yTry, &mRootNum, rArray);
+	  (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
 	  
 	  // Update root r
 	  if(rArray[r]*vL >=0) // same sign as vL
@@ -825,9 +855,9 @@ void CExpRKMethod::findSlowReaction()
   if (mY[mDim-1]*mYNew[mDim-1]>0)//now slow reaction
     return;
 
-  double *tArray = &mZ1;
-  double *yArray = &mZ2;
-  double *yInter = &mZ3;
+  double *tArray = mZ1;
+  double *yArray = mZ2;
+  double *yInter = mZ3;
   size_t cnt = 1;
 
   // Record t and y
@@ -847,12 +877,62 @@ void CExpRKMethod::findSlowReaction()
   yArray[cnt] = mYNew[mDim-1];
   cnt++;
 
+  // check whether yArray[i] is close to 0
+  SRoot root;
+
+  double tol = EPS;
+  for(int i=0; i<cnt; ++i)
+    {
+      if(dabs(yArray[i]) <= tol)
+	{
+	  root.id = mRootNum;
+	  root.t  = tArray[i];
+	  mRootQueue.push(root);
+	  return;
+	}
+    }
+
   // Do Inverse Interpolation
-  
+  double t = 0, localT;
+  for(int i=0; i<cnt; i++)
+    {
+      localT = 1;
+      for(int j=0; j<cnt; j++)
+	{
+	  if(i != j)
+	    localT *= yArray[j] / (yArray[j]-yArray[i]);
+	}
 
+      t += localT * tArray[i]; 
+    }
 
+  root.id = mRootNum;
+  root.t  = t;
+  mRootQueue.push(root);
+  return;
 }
 
+
+
+void CExpRKMethod::calculateRootState()
+{
+  if (mRootQueue.empty())
+    {
+      std::cout << "No root in mRootQueue! Check Code......" << std::endl;
+      mODEState = -2;
+      return;
+    }
+
+  SRoot root = mRootQueue.front();
+  mRootQueue.pop();
+
+  mRootId = root.id;
+  mT      = root.t;
+  interpolation(root.t, mY);
+
+  mODEState = 3;
+  return;
+}
 
 
 
@@ -884,9 +964,9 @@ void CExpRKMethod::checkParameter()
       return;
     }
 
-  if(mInitY.size()!=mDim)
+  if(!mY)
     {
-      std::cout << "Dimension of initial state should be the same as mDim which has been set!" << std::endl;
+      std::cout << "mY should be set before integration!" << std::endl;
       return;
     }
 
@@ -911,7 +991,7 @@ void CExpRKMethod::checkParameter()
 //***************************//
 //* Other Helpful Functions *//
 //***************************//
-double CExpRKMethod::infNorm(const size_t &len, const double &y)
+double CExpRKMethod::infNorm(const size_t &len, const double *y)
 {
   double result, tmp;
   result =(y[0]>=0)?y[0]:-y[0];
@@ -944,4 +1024,12 @@ double CExpRKMethod::dabs(const double &x)
 double CExpRKMethod::deps(const double &x)
 {
   return (x==0)? EPS0 : dabs(x)*EPS;
+}
+
+
+void CExpRKMethod::clearQueue(std::queue<SRoot> &qRoot)
+{
+  std::queue<SRoot> emp;
+  std::swap(qRoot, emp);
+  return;
 }
