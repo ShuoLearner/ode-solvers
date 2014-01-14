@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <iomanip>
 
 
 //*********************************//
@@ -154,7 +155,7 @@ void CExpRKMethod::integrate()
   // 1 check mODEstate  //
   //====================//
   checkODEState();
-  std::cout << "After ODEState Check" << std::endl;
+  std::cout << "mODEState=" << mODEState << std::endl;
   if(mODEState == 1)//Restart
     {
       mFinish = false;
@@ -192,7 +193,7 @@ void CExpRKMethod::integrate()
 	{
 	  mh = mTEnd - mT;
 	  mFinish = true;
-	  std::cout << "mT is close to mTEnd" << std::endl;
+	  //std::cout << "mT is close to mTEnd" << std::endl;
 	}
 
       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
@@ -207,7 +208,8 @@ void CExpRKMethod::integrate()
 	{
 	  // (i) Do One Single Step
 	  doOneStep();
- 
+	  //std::cout << "After One Step" << std::endl;
+	  
 	  // (ii) Update Statistic Record
 	  mfEvalNum += mStage;
 	  
@@ -221,6 +223,10 @@ void CExpRKMethod::integrate()
 	      mhNoFailed = false;
 	      mRejectNum++;
 	      mh *= 0.5; // Use half step size h
+
+	      if (mFinish)
+		mFinish = false;
+
 	      if (mh < mhMin)
 		{
 		  mODEState = -2;
@@ -232,7 +238,6 @@ void CExpRKMethod::integrate()
 	    }
 	  else // Step Accept
 	    {
-
 	      mhMin = deps(mTNew) * 16.0;
 
 	      //std::cout << "Step Accepted" << std::endl;
@@ -378,7 +383,7 @@ void CExpRKMethod::doOneStep()
 	{
 	  double a = mA[s][i] * mh;
 	  for (int j=0; j<mDim; j++)
-	    mZ1[i] += mK[i][j] * a;
+	    mZ1[j] += mK[i][j] * a;
 	}
 
       mDerivFunc(&t, mZ1, mK[s]);
@@ -389,11 +394,11 @@ void CExpRKMethod::doOneStep()
   size_t s = mStage-1;
   mTNew = mT + mh;
 
-  if(mFinish)
+  /*if(mFinish)
     {
       mTNew = mTEnd;
       mh = mTEnd - mT;
-    }
+      }*/
   
   // (3) New Y, mYNew
   for(int i=0; i<mDim; i++)
@@ -469,7 +474,7 @@ void CExpRKMethod::advanceStep()
   if(mEventFunc)
     {
       for(int i=0; i<mRootNum; i++)
-	mRootValue[i] = mRootValueOld[i];
+	mRootValueOld[i] = mRootValue[i];
     }
 
   return;
@@ -591,10 +596,10 @@ void CExpRKMethod::setCoeff()
     {1.,  -183./64,     37./12,   -145./128},
     {0,          0,          0,           0},
     {0,  1500./371, -1000./159,   1000./371},
-    {0,   -125./32   , 125./12,    -375./64},
+    {0,   -125./32,    125./12,    -375./64},
     {0, 9477./3392,  -729./106, 25515./6784},
     {0,     -11./7,      11./3,     -55./28},
-    {0,       3./2,         -4,        5./2}
+    {0,       3./2,        -4.,        5./2}
   };
 
   for(int r=0; r<mStage+1; r++)
@@ -695,7 +700,7 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
   double tmp = (tInterp-mT)/mh;
   double S[MAX_STAGE];
 
-  S[0] = tmp;
+  S[0] = tmp * mh;
   for(int i=1; i<mOrderY; i++)
     S[i] = S[i-1]*tmp;
 
@@ -708,9 +713,9 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
 	  tmp = 0;
 	  
 	  for(int j=0; j<mStage+1; j++)
-	    tmp += mI[j][s] * mK[j][d];
+	    tmp += mK[j][d] * mI[j][s];
 	    
-	  yInterp[d] += mh * tmp * S[s];
+	  yInterp[d] += tmp * S[s];
 	}
     }
   
@@ -720,7 +725,7 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
 void CExpRKMethod::findRoots()
 {
   // 1. Calculate New Root Value for mRootValue
-  (*mEventFunc)(&mT, mY, &mRootNum, mRootValue);
+  (*mEventFunc)(&mTNew, mYNew, &mRootNum, mRootValue);
 
   // 2. Check Sign Change
   bool hasEvent = false;
@@ -743,8 +748,6 @@ void CExpRKMethod::findRoots()
   if (!hasEvent)
     return;
 
-  std::cout << "Find root Here" << std::endl;
-  
   // 3. Find Roots
   int maxIter = 100;
   double tol, delta, step;
@@ -752,7 +755,7 @@ void CExpRKMethod::findRoots()
   SRoot root;
 
   double *rArray = mZ2;
-  double *yTry = mZ1;
+  double *yTry   = mZ1;
 
   tol = dmax(deps(mT), deps(mTNew)) * 128;
   tol = dmin(tol, dabs(mTNew-mT));
@@ -768,6 +771,16 @@ void CExpRKMethod::findRoots()
       vL = mTimeRange[r].vLeft;
       vR = mTimeRange[r].vRight;
       
+      std::cout << "y: ";
+      for(int k=0; k<mDim; ++k)
+	std::cout << mY[k] << " ";
+      std::cout << std::endl;
+
+      std::cout << "yNew: ";
+      for(int k=0; k<mDim; ++k)
+	std::cout << mYNew[k] << " ";
+      std::cout << std::endl;
+
       // (2) Regula Falsi Iteration 
       for(int i=0; i<maxIter; i++)
 	{
@@ -793,19 +806,35 @@ void CExpRKMethod::findRoots()
 	  step = dmax(0.5*tol, dmin(step, delta-0.5*tol));
 	  tTry = tL + step;
 	
+	  std::cout << "tL " << tL << "  tR " << tR << std::endl;
+	  std::cout << "vL " << vL << "  vR " << vR << std::endl;
+	  std::cout << "Slope: " << (vR-vL)/delta << std::endl;
+
+	  std::cout << "mT: " << mT << "  tTry:" << tTry << std::endl;
+	  std::cout << "yTry:" << std::endl;
 	  interpolation(tTry, yTry);
+	  for(int c=0; c<mDim; c++)
+	    std::cout << yTry[c] << " ";
+	  std::cout << std::endl;
+
 	  (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+	  std::cout << "rArray:" << std::endl;
+	  for (int c=0; c<mRootNum; c++)
+	    std::cout << rArray[c] << " ";
+	  std::cout << std::endl;
+
+	  getchar();
 	  
 	  // Update root r
 	  if(rArray[r]*vL >=0) // same sign as vL
 	    {
-	      mTimeRange[r].tLeft = tTry;
-	      mTimeRange[r].vLeft = rArray[r];
+	      tL = tTry;
+	      vL = rArray[r];
 	    }
 	  else
 	    {
-	      mTimeRange[r].tRight = tTry;
-	      mTimeRange[r].vRight = rArray[r];
+	      tR = tTry;
+	      vR = rArray[r];
 	    }
 
 	  // Update Other root information
@@ -915,6 +944,7 @@ void CExpRKMethod::calculateRootState()
   interpolation(root.t, mY);
 
   mODEState = 3;
+  mODEStateRecord = mODEState;
   return;
 }
 
