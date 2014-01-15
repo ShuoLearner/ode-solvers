@@ -35,14 +35,6 @@ struct SRoot
   double t;
 };
 
-struct SRange
-{
-  bool inRange;
-  double vLeft;
-  double vRight;
-  double tLeft;
-  double tRight;
-};
 
 class CExpRKMethod
 {
@@ -114,6 +106,12 @@ class CExpRKMethod
 
 
   void findRoots();
+
+
+  double rootFindBySecant(const size_t id);
+
+
+  double rootFindByBisection(const size_t id);
 
 
   void findSlowReaction();
@@ -412,10 +410,17 @@ class CExpRKMethod
   size_t mRejectNum;
 
   /*
-   * mfEvalNum, a size_t variable, recording how many times pDerivFunc 
+   * mfEvalNum, a size_t variable, recording how many times mDerivFunc 
    *            are called
    */
   size_t mfEvalNum;
+
+  /*
+   * mrEvalNum, a size_t variable, recording how many times mEventFunc 
+   *            are called
+   */
+  size_t mrEvalNum;
+
 
   //******************************************//
   //* Variables for Root Finding functions   *//
@@ -456,12 +461,6 @@ class CExpRKMethod
    * mOrderYp, the order of Y prime interpolation can achieve
    */
   size_t mOrderYp;
-
-
-  /*
-   * mTimeRange
-   */
-  SRange *mTimeRange;
 
 
   

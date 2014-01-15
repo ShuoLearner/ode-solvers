@@ -42,6 +42,11 @@ int main()
       ode45.mTEnd = (i+1)*10;
       
       ode45.integrate();
+      if (ode45.mODEState == -2)
+	{
+	  std::cout << "Find Error" << std::endl;
+	  break;
+	}
       if(ode45.mODEState == 4)
 	{
 	  ode45.mODEState = 1;

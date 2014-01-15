@@ -1,5 +1,7 @@
 #include <iostream>
-#include          "CExpRKMethod.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "CExpRKMethod.h"
 
 // Parameters:
 // 1. double mT
@@ -49,13 +51,13 @@ int main()
 	{
 	  if ((ode45.mRootId == 0) || (ode45.mRootId == 1))
 	    {
-	      ode45.mODEState = 2;
 	      std::cout << "Root ID = 0" << std::endl;
 	      std::cout << "t: " << ode45.mT << " ";
 	      for (int j=0; j<ode45.mDim; ++j)
 		std::cout << y[j] << " ";
 	    
 	      std::cout << std::endl;
+	      ode45.mODEState = 2;
 	    }
 
 	  else if(ode45.mRootId == 2)
@@ -71,6 +73,8 @@ int main()
 	      ode45.mODEState = 1;
 	    }
 
+	  getchar();
+
 	}
       else if(ode45.mODEState == 4)
 	{
@@ -80,6 +84,11 @@ int main()
 	    std::cout << y[j] << " ";
 	    
 	  std::cout << std::endl;
+	  break;
+	}
+      else if(ode45.mODEState == -2)
+	{
+	  std::cout << "Error" << std::endl;
 	  break;
 	}
     }

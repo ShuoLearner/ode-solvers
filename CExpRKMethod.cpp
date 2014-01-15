@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <iomanip>
 
 
 //*********************************//
@@ -57,7 +58,6 @@ CExpRKMethod::CExpRKMethod()
   // Default root finder related
   mRootId       = -1;
   mRootNum      = 0;
-  mTimeRange    = NULL;
   mRootValue    = NULL;
   mRootValueOld = NULL;
 
@@ -68,7 +68,7 @@ CExpRKMethod::CExpRKMethod()
   mAcceptNum = 0;
   mRejectNum = 0;
   mfEvalNum  = 0;
-
+  mrEvalNum  = 0;
 
   // Default tempt variable
   mZ1 = NULL;
@@ -116,12 +116,6 @@ CExpRKMethod::~CExpRKMethod()
       mRootValue = NULL;
     }
 
-  if(mTimeRange)
-    {
-      delete [] mTimeRange;
-      mTimeRange = NULL;
-    }
-
 
   if(mZ1)
     {
@@ -154,7 +148,7 @@ void CExpRKMethod::integrate()
   // 1 check mODEstate  //
   //====================//
   checkODEState();
-  std::cout << "After ODEState Check" << std::endl;
+  std::cout << "mODEState=" << mODEState << std::endl;
   if(mODEState == 1)//Restart
     {
       mFinish = false;
@@ -192,7 +186,7 @@ void CExpRKMethod::integrate()
 	{
 	  mh = mTEnd - mT;
 	  mFinish = true;
-	  std::cout << "mT is close to mTEnd" << std::endl;
+	  //std::cout << "mT is close to mTEnd" << std::endl;
 	}
 
       //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
@@ -207,7 +201,8 @@ void CExpRKMethod::integrate()
 	{
 	  // (i) Do One Single Step
 	  doOneStep();
- 
+	  //std::cout << "After One Step" << std::endl;
+	  
 	  // (ii) Update Statistic Record
 	  mfEvalNum += mStage;
 	  
@@ -221,6 +216,10 @@ void CExpRKMethod::integrate()
 	      mhNoFailed = false;
 	      mRejectNum++;
 	      mh *= 0.5; // Use half step size h
+
+	      if (mFinish)
+		mFinish = false;
+
 	      if (mh < mhMin)
 		{
 		  mODEState = -2;
@@ -376,7 +375,7 @@ void CExpRKMethod::doOneStep()
 	{
 	  double a = mA[s][i] * mh;
 	  for (int j=0; j<mDim; j++)
-	    mZ1[i] += mK[i][j] * a;
+	    mZ1[j] += mK[i][j] * a;
 	}
 
       mDerivFunc(&t, mZ1, mK[s]);
@@ -386,12 +385,6 @@ void CExpRKMethod::doOneStep()
   // (2) New Time, mTNew
   size_t s = mStage-1;
   mTNew = mT + mh;
-
-  if(mFinish)
-    {
-      mTNew = mTEnd;
-      mh = mTEnd - mT;
-    }
   
   // (3) New Y, mYNew
   for(int i=0; i<mDim; i++)
@@ -434,7 +427,6 @@ double CExpRKMethod::estimateError()
   // (2) Calculate Standard sc=Atol + max(|y|,|ynew|)*Rtol
   for(int i=0; i<mDim; i++)
     mZ3[i] = mAbsTol + dmax(dabs(mY[i]), dabs(mYNew[i]))*mRelTol;
-
   
   // (3) Calculate Error
   double error = 0, tmp;
@@ -508,8 +500,6 @@ void CExpRKMethod::initialize()
       (*mEventFunc)(&mT, mY, &mRootNum, mRootValueOld);
 
       clearQueue(mRootQueue);
-
-      mTimeRange = new SRange[mRootNum];
     }
 
   return;
@@ -589,10 +579,10 @@ void CExpRKMethod::setCoeff()
     {1.,  -183./64,     37./12,   -145./128},
     {0,          0,          0,           0},
     {0,  1500./371, -1000./159,   1000./371},
-    {0,   -125./32   , 125./12,    -375./64},
+    {0,   -125./32,    125./12,    -375./64},
     {0, 9477./3392,  -729./106, 25515./6784},
     {0,     -11./7,      11./3,     -55./28},
-    {0,       3./2,         -4,        5./2}
+    {0,       3./2,        -4.,        5./2}
   };
 
   for(int r=0; r<mStage+1; r++)
@@ -605,7 +595,6 @@ void CExpRKMethod::setCoeff()
   mK = new double*[mStage+1];
   for (int r=0; r<mStage+1; r++)
     mK[r] = new double[mDim];
-
 
   return;
 }
@@ -621,6 +610,8 @@ void CExpRKMethod::setStatRecord()
   mAcceptNum = 0;
   mRejectNum = 0;
   mfEvalNum  = 0;
+  mrEvalNum  = 0;
+  return;
 }
 
 
@@ -693,7 +684,7 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
   double tmp = (tInterp-mT)/mh;
   double S[MAX_STAGE];
 
-  S[0] = tmp;
+  S[0] = tmp * mh;
   for(int i=1; i<mOrderY; i++)
     S[i] = S[i-1]*tmp;
 
@@ -706,9 +697,9 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
 	  tmp = 0;
 	  
 	  for(int j=0; j<mStage+1; j++)
-	    tmp += mI[j][s] * mK[j][d];
+	    tmp += mK[j][d] * mI[j][s];
 	    
-	  yInterp[d] += mh * tmp * S[s];
+	  yInterp[d] += tmp * S[s];
 	}
     }
   
@@ -718,133 +709,107 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
 void CExpRKMethod::findRoots()
 {
   // 1. Calculate New Root Value for mRootValue
-  (*mEventFunc)(&mT, mY, &mRootNum, mRootValue);
+  (*mEventFunc)(&mTNew, mYNew, &mRootNum, mRootValue);
+  ++mrEvalNum;
 
-  // 2. Check Sign Change
-  bool hasEvent = false;
-  for (int i=0; i<mRootNum; i++)
-    {
-      if (mRootValue[i]*mRootValueOld[i] <= 0)
-	{
-	  mTimeRange[i].inRange = true;
-	  mTimeRange[i].tLeft   = mT;
-	  mTimeRange[i].tRight  = mTNew;
-	  mTimeRange[i].vLeft   = mRootValueOld[i];
-	  mTimeRange[i].vRight  = mRootValue[i];
-
-	  hasEvent = true;
-	  std::cout << "Find root "<< i << std::endl;
-	}
-      else
-	mTimeRange[i].inRange = false;
-    }
-
-  if (!hasEvent)
-      return;
-  
-
-  // 3. Find Roots
-  int maxIter = 100;
-  double tol, delta, step;
-  double tL, tR, vL, vR, tTry;
+  // 2. Main Loop
   SRoot root;
 
-  double *rArray = mZ2;
-  double *yTry   = mZ1;
-
-  tol = dmax(deps(mT), deps(mTNew)) * 128;
-  tol = dmin(tol, dabs(mTNew-mT));
-
-  for (int r=0; r<mRootNum; r++)
+  for (int r=0; r<mRootNum; ++r)
     {
-      if (!mTimeRange[r].inRange)
+      if (mRootValue[r]*mRootValueOld[r] > 0)
 	continue;
 
-      // (1) Set Initial Value
-      tL = mTimeRange[r].tLeft;
-      tR = mTimeRange[r].tRight;
-      vL = mTimeRange[r].vLeft;
-      vR = mTimeRange[r].vRight;
-      
-      std::cout << "tL " << tL << "  tR " << tR << std::endl;
-      std::cout << "vL " << vL << "  vR " << vR << std::endl;
+      root.id = r;
+      double threshold = 1.0, slope = dabs((mRootValue[r]-mRootValueOld[r]) / mh);
+      //if (slope > threshold)
+      //	root.t = rootFindBySecant(r);
+      //      else
+	root.t = rootFindByBisection(r);
+	  
+	std::cout << "slope=" << slope << std::endl;
 
-      // (2) Regula Falsi Iteration 
-      for(int i=0; i<maxIter; i++)
-	{
-	  // Find Root
-	  bool findRoot = true;
-	  delta = tR - tL;
-	  if ((dabs(delta)<tol) || (vL == 0.0))
-	    root.t = tL;
-	  else if(vR == 0.0)
-	    root.t  = tR;
-	  else
-	    findRoot = false;
+      mRootQueue.push(root);	
+    }
+  return;
+}
 
-	  if(findRoot)
-	    {
-	      root.id = r;
-	      mRootQueue.push(root);
-	      break;
-	    }
-	 
-	  // Go Next Step
-	  step = -vL/(vR-vL) * delta;
-	  step = dmax(0.5*tol, dmin(step, delta-0.5*tol));
-	  tTry = tL + step;
-	
-	  std::cout << "tTry= " << tTry << std::endl;
+double CExpRKMethod::rootFindBySecant(const size_t id)
+{
+  int maxIter = 20;
+  double tol = deps(dabs(mTNew));
+  double *yTry = mZ1, *rArray = mZ2;
+  double yp = (mRootValue[id]-mRootValueOld[id]) / mh;
+  double x1 = mT, y1 = mRootValueOld[id], tTry;
+  double delta;
 
-	  interpolation(tTry, yTry);
+  for (int i=0; i<maxIter; ++i)
+    {
+      delta = -y1 / yp;
+      tTry = x1 + delta;
 
-	  std::cout << "yTry  "; 
-	  for (int c=0; c<mDim; ++c)
-	    std::cout << yTry[c] << " ";
-	  std::cout << std::endl;
-	    
+      if (dabs(delta) <= tol)
+	return tTry;
 
-	  (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+      interpolation(tTry, yTry);
+      (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+      ++mrEvalNum;
 
-	  std::cout << "rArray=" << rArray[r] << std::endl;
-	  // Update root r
-	  if(rArray[r]*vL >=0) // same sign as vL
-	    {
-	      tL = tTry;
-	      vL = rArray[r];
-	    }
-	  else
-	    {
-	      tR = tTry;
-	      vR = rArray[r];
-	    }
+      if((tTry>mTNew) || (tTry<mT))
+	std::cout << "Secant Method is dealing with t out of range [mT, mTNew]" << std::endl;
 
-	  std::cout << "tLeft " << mTimeRange[r].tLeft << "  tRight " << mTimeRange[r].tRight << std::endl;
-	  std::cout << "vLeft " << mTimeRange[r].vLeft << "  vRight " << mTimeRange[r].vRight << std::endl;
-	  getchar();
+      yp = (rArray[id]-y1) / delta;
+      x1 = tTry; y1 = rArray[id];
 
-	  // Update Other root information
-	  for(int j=r+1; j<mRootNum; j++)
-	    {
-	      if(mTimeRange[j].inRange && (tTry>mTimeRange[j].tLeft) && (tTry<mTimeRange[j].tRight))
-		{
-		  if(mTimeRange[j].vLeft*rArray[j]>=0)
-		    {
-		      mTimeRange[j].tLeft = tTry;
-		      mTimeRange[j].vLeft = rArray[j];
-		    }
-		  else
-		    {
-		      mTimeRange[j].tRight = tTry;
-		      mTimeRange[j].vRight = rArray[j];
-		    }
-		}
-	    }// end update root information
-
-	}// for one root
     }
 
-  return;
+  std::cout << "Secant Method executed more than " << maxIter << " times!" << std::endl;
+  return x1;
+}
+
+double CExpRKMethod::rootFindByBisection(const size_t id)
+{
+  int maxIter = 50;
+  double tol = deps(dabs(mTNew));
+  double *yTry = mZ1, *rArray = mZ2;
+  double x1 = mT, y1 = mRootValueOld[id], x2 = mTNew, y2 = mRootValue[id], tTry;
+
+  for (int i=0; i<maxIter; ++i)
+    {
+      if (dabs(x1-x2) < tol)
+	return x1;
+
+      tTry = (x1 + x2) / 2.;
+
+      interpolation(tTry, yTry);
+      (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+      ++mrEvalNum;
+
+      if (dabs(rArray[id]) < deps(1))
+	return tTry;
+      else if(rArray[id]*y1 >= 0)
+	{
+	  x1 = tTry;
+	  y1 = rArray[id];
+	}
+      else
+	{
+	  x2 = tTry;
+	  y2 = rArray[id];
+	}
+
+      std::cout << "yTry" << std::endl;
+      for(int j=0; j<mDim; ++j)
+	std::cout << yTry[j] << " ";
+      std::cout << std::endl;
+
+      std::cout << "x1 " << x1 << "  y1 " << y1 << std::endl;
+      std::cout << "x2 " << x2 << "  y2 " << y2 << std::endl;
+      getchar();
+    }
+
+  std::cout << "Bisection Method executed more than " << maxIter << " times!" << std::endl;
+  return tTry;
 }
 
 
@@ -927,9 +892,10 @@ void CExpRKMethod::calculateRootState()
 
   mRootId = root.id;
   mT      = root.t;
-  interpolation(root.t, mY);
+  interpolation(mT, mY);
 
   mODEState = 3;
+  mODEStateRecord = mODEState;
   return;
 }
 
