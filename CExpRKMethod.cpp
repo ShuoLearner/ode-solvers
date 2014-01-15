@@ -26,9 +26,11 @@ CExpRKMethod::CExpRKMethod()
   // Default system state
   mDim    = 0;
   mT      = 0;
+  mTCp    = 0;
   mTEnd   = 0;
   mTNew   = 0;
   mY      = NULL;
+  mYCp    = NULL;
   mYNew   = NULL;
   mK      = NULL;
   mFinish = false;
@@ -89,6 +91,12 @@ CExpRKMethod::~CExpRKMethod()
   if (mEventFunc)
     mEventFunc = NULL;
 
+  if (mYCp)
+    {
+      delete [] mYCp;
+      mYCp = NULL;
+    }
+
   if (mYNew)
     {
       delete [] mYNew;
@@ -148,23 +156,22 @@ void CExpRKMethod::integrate()
   // 1 check mODEstate  //
   //====================//
   checkODEState();
-  std::cout << "mODEState=" << mODEState << std::endl;
   if(mODEState == 1)//Restart
     {
       mFinish = false;
       allocateSpace();
       setInitialStepSize();
-      mDerivFunc(&mT, mY, mK[0]);//record derivative to mK
+      mDerivFunc(&mT, mY, mK[0]);//record derivative to
+      //calculate mRootValueOld
 
-      //std::cout << "Finish ODEState==1" << std::endl;
+      if(mHasEvent)
+	(*mEventFunc)(&mT, mY, &mRootNum, mRootValueOld);
     }
   else if (mODEState == 3) // has event
     {
-      std::cout << "In State mODEState == 3" << std::endl;
       //If events queue isn't empty, deal with the next event, and return
       if (!mRootQueue.empty())
 	{
-	  std::cout << "Still has root" << std::endl;
 	  calculateRootState();
 	  return;
 	}
@@ -249,6 +256,14 @@ void CExpRKMethod::integrate()
       //~~~~~~~~~~~~~~~~~~//
       // (4) Check Events //
       //~~~~~~~~~~~~~~~~~~//
+      if(mHasEvent)
+	{
+	  (*mEventFunc)(&mTNew, mYNew, &mRootNum, mRootValue);
+	  ++mrEvalNum;
+	}
+
+      copyData();
+
       if (mHasEvent)
 	findRoots();
 
@@ -449,7 +464,7 @@ double CExpRKMethod::estimateError()
  */
 void CExpRKMethod::advanceStep()
 {
-  mT = mTNew;
+  mT   = mTNew;
   for(int i=0; i<mDim; i++)
     mY[i] = mYNew[i];
 
@@ -496,9 +511,6 @@ void CExpRKMethod::initialize()
       mRootValueOld = new double[mRootNum];
       mRootValue    = new double[mRootNum];
 
-      //calculate mRootValueOld
-      (*mEventFunc)(&mT, mY, &mRootNum, mRootValueOld);
-
       clearQueue(mRootQueue);
     }
 
@@ -509,10 +521,30 @@ void CExpRKMethod::initialize()
 void CExpRKMethod::allocateSpace()
 {  
   // ----(1)----
+  //----Set mK----
+  if(mK)
+    {
+      for(int i=mStage; i>=0; i--)
+	delete [] mK[i];
+      
+      delete [] mK;
+    }
+
+  mK = new double*[mStage+1];
+  for (int r=0; r<mStage+1; r++)
+    mK[r] = new double[mDim];
+
+  //----Set mYNew----
   if(mYNew)
     delete [] mYNew;
 
   mYNew = new double[mDim];
+
+  //----Set mYCp----
+  if(mYCp)
+    delete [] mYCp;
+
+  mYCp = new double[mDim];
 
   // ----(2)----
   size_t size = (mDim>mRootNum) ? mDim : mRootNum;
@@ -590,11 +622,6 @@ void CExpRKMethod::setCoeff()
       for(int c=0; c<mOrderY; c++)
 	mI[r][c] = I[r][c];
     }
-
-  //----Set mK----
-  mK = new double*[mStage+1];
-  for (int r=0; r<mStage+1; r++)
-    mK[r] = new double[mDim];
 
   return;
 }
@@ -681,16 +708,16 @@ void CExpRKMethod::setInitialStepSize()
 
 void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
 {
-  double tmp = (tInterp-mT)/mh;
+  double tmp = (tInterp-mTCp) / (mTNew-mTCp);
   double S[MAX_STAGE];
 
-  S[0] = tmp * mh;
+  S[0] = tmp * (mTNew-mTCp);
   for(int i=1; i<mOrderY; i++)
     S[i] = S[i-1]*tmp;
 
   for(int d=0; d<mDim; d++)
     {
-      yInterp[d] = mY[d];
+      yInterp[d] = mYCp[d];
       
       for(int s=0; s<mOrderY; s++)
 	{
@@ -706,13 +733,40 @@ void CExpRKMethod::interpolation(const double tInterp, double *yInterp)
   return;
 }
 
+void CExpRKMethod::copyData()
+{
+  bool needCp = false;
+  if (mHasEvent)
+    {
+      for(int r=0; r<mRootNum; ++r)
+	{
+	  if(mRootValue[r]*mRootValueOld[r]<=0)
+	    {
+	      needCp = true;
+	      break;
+	    }
+	}
+    }
+
+  if(!needCp && mHybrid)
+    {
+      if(mY[mDim-1]*mYNew[mDim-1]<=0)
+	needCp = true;
+    }
+
+  if(needCp)
+    {
+      mTCp = mT;
+      for(int i=0; i<mDim; ++i)
+	mYCp[i] = mY[i];
+    }
+
+  return;
+}
+
+
 void CExpRKMethod::findRoots()
 {
-  // 1. Calculate New Root Value for mRootValue
-  (*mEventFunc)(&mTNew, mYNew, &mRootNum, mRootValue);
-  ++mrEvalNum;
-
-  // 2. Main Loop
   SRoot root;
 
   for (int r=0; r<mRootNum; ++r)
@@ -721,13 +775,13 @@ void CExpRKMethod::findRoots()
 	continue;
 
       root.id = r;
-      double threshold = 1.0, slope = dabs((mRootValue[r]-mRootValueOld[r]) / mh);
-      //if (slope > threshold)
-      //	root.t = rootFindBySecant(r);
-      //      else
-	root.t = rootFindByBisection(r);
-	  
-	std::cout << "slope=" << slope << std::endl;
+      double threshold = 0.1, slope = dabs((mRootValue[r]-mRootValueOld[r]) / mh);
+      std::cout.precision(15);
+      if (slope > threshold)
+      	root.t = rootFindBySecant(r);
+      else
+	root.t = rootFindByFalsi(r);
+      //	root.t = rootFindByBisection(r);  
 
       mRootQueue.push(root);	
     }
@@ -737,11 +791,15 @@ void CExpRKMethod::findRoots()
 double CExpRKMethod::rootFindBySecant(const size_t id)
 {
   int maxIter = 20;
-  double tol = deps(dabs(mTNew));
+  double tol = dmin(deps(dabs(mTNew)), mTNew-mTCp);
   double *yTry = mZ1, *rArray = mZ2;
-  double yp = (mRootValue[id]-mRootValueOld[id]) / mh;
-  double x1 = mT, y1 = mRootValueOld[id], tTry;
-  double delta;
+  double x1 = mTCp, y1 = mRootValueOld[id], tTry;
+  double delta, yp;
+
+  tTry = x1 + dmax((mTNew-mTCp)/10.0, tol);
+  interpolation(tTry, yTry);
+  (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+  yp = (rArray[id]-y1) / (tTry-mTCp);
 
   for (int i=0; i<maxIter; ++i)
     {
@@ -749,11 +807,14 @@ double CExpRKMethod::rootFindBySecant(const size_t id)
       tTry = x1 + delta;
 
       if (dabs(delta) <= tol)
-	return tTry;
+	{
+	  mrEvalNum += i+1;
+	  //std::cout << "Secant Loop " << i+1 << std::endl;
+	  return tTry;
+	}
 
       interpolation(tTry, yTry);
       (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
-      ++mrEvalNum;
 
       if((tTry>mTNew) || (tTry<mT))
 	std::cout << "Secant Method is dealing with t out of range [mT, mTNew]" << std::endl;
@@ -770,24 +831,55 @@ double CExpRKMethod::rootFindBySecant(const size_t id)
 double CExpRKMethod::rootFindByBisection(const size_t id)
 {
   int maxIter = 50;
-  double tol = deps(dabs(mTNew));
+  double tol = dmin(deps(dabs(mTNew)), mTNew-mTCp);
   double *yTry = mZ1, *rArray = mZ2;
-  double x1 = mT, y1 = mRootValueOld[id], x2 = mTNew, y2 = mRootValue[id], tTry;
+  double x1 = mTCp, y1 = mRootValueOld[id], x2 = mTNew, y2 = mRootValue[id], tTry;
 
   for (int i=0; i<maxIter; ++i)
     {
       if (dabs(x1-x2) < tol)
-	return x1;
+	{
+	  mrEvalNum += i+1;
+	  //std::cout << "Bisection Loop " << i+1 << std::endl;
+	  return x1;
+	}
 
       tTry = (x1 + x2) / 2.;
 
       interpolation(tTry, yTry);
       (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
-      ++mrEvalNum;
+      
+      if(rArray[id]*y1 >= 0)
+	{
+	  x1 = tTry;
+	  y1 = rArray[id];
+	}
+      else
+	{
+	  x2 = tTry;
+	  y2 = rArray[id];
+	}
+    }
 
-      if (dabs(rArray[id]) < deps(1))
-	return tTry;
-      else if(rArray[id]*y1 >= 0)
+  std::cout << "Bisection Method executed more than " << maxIter << " times!" << std::endl;
+  return tTry;
+}
+
+double CExpRKMethod::rootFindByFalsi(const size_t id)
+{
+  int maxIter = 50;
+  double tol = dmin(deps(dabs(mTNew)), mTNew-mTCp);
+  double *yTry = mZ1, *rArray = mZ2;
+  double x1 = mTCp, y1 = mRootValueOld[id], x2 = mTNew, y2 = mRootValue[id], tTry, tTry0;
+
+  tTry0 = x1;
+  for (int i=0; i<maxIter; ++i)
+    {
+      tTry = x1 - y1 *(x2-x1)/(y2-y1);
+      interpolation(tTry, yTry);
+      (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+
+      if(rArray[id]*y1 >= 0)
 	{
 	  x1 = tTry;
 	  y1 = rArray[id];
@@ -798,17 +890,17 @@ double CExpRKMethod::rootFindByBisection(const size_t id)
 	  y2 = rArray[id];
 	}
 
-      std::cout << "yTry" << std::endl;
-      for(int j=0; j<mDim; ++j)
-	std::cout << yTry[j] << " ";
-      std::cout << std::endl;
+      if (dabs(tTry-tTry0) < tol)
+	{
+	  mrEvalNum += i+1;
+	  //std::cout << "Falsi Loop " << i+1 << std::endl;
+	  return tTry;
+	}
 
-      std::cout << "x1 " << x1 << "  y1 " << y1 << std::endl;
-      std::cout << "x2 " << x2 << "  y2 " << y2 << std::endl;
-      getchar();
+      tTry0 = tTry;
     }
 
-  std::cout << "Bisection Method executed more than " << maxIter << " times!" << std::endl;
+  std::cout << "Falsi Method executed more than " << maxIter << " times!" << std::endl;
   return tTry;
 }
 
@@ -825,13 +917,13 @@ void CExpRKMethod::findSlowReaction()
   size_t cnt = 1;
 
   // Record t and y
-  tArray[0] = mT;
+  tArray[0] = mTCp;
   yArray[0] = mY[mDim-1];
   for (int i=1; i<=mStage; i++)
     {
       if (mC[i]>0 && mC[i]<1)
 	{
-	  tArray[cnt] = mT + mC[i]*mh;
+	  tArray[cnt] = mTCp + mC[i]*mh;
 	  interpolation(tArray[cnt], yInter);
 	  yArray[cnt] = yInter[mDim-1];
 	  cnt++;
@@ -849,7 +941,7 @@ void CExpRKMethod::findSlowReaction()
     {
       if(dabs(yArray[i]) <= tol)
 	{
-	  root.id = mRootNum;
+	  root.id = -1;
 	  root.t  = tArray[i];
 	  mRootQueue.push(root);
 	  return;
@@ -870,7 +962,7 @@ void CExpRKMethod::findSlowReaction()
       t += localT * tArray[i]; 
     }
 
-  root.id = mRootNum;
+  root.id = -1;
   root.t  = t;
   mRootQueue.push(root);
   return;

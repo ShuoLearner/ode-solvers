@@ -51,7 +51,7 @@ int main()
 	{
 	  if ((ode45.mRootId == 0) || (ode45.mRootId == 1))
 	    {
-	      std::cout << "Root ID = 0" << std::endl;
+	      std::cout << "Root ID = "<< ode45.mRootId  << std::endl;
 	      std::cout << "t: " << ode45.mT << " ";
 	      for (int j=0; j<ode45.mDim; ++j)
 		std::cout << y[j] << " ";
@@ -62,7 +62,7 @@ int main()
 
 	  else if(ode45.mRootId == 2)
 	    {
-	      std::cout << "Root ID = 1" << std::endl;
+	      std::cout << "Root ID = 2" << std::endl;
 	      std::cout << "t: " << ode45.mT << " ";
 	      for (int j=0; j<ode45.mDim; ++j)
 		std::cout << y[j] << " ";
@@ -72,9 +72,6 @@ int main()
 	      y[0] = 0;  y[1] = 200; y[2] = 0;
 	      ode45.mODEState = 1;
 	    }
-
-	  getchar();
-
 	}
       else if(ode45.mODEState == 4)
 	{

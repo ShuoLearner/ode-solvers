@@ -105,6 +105,9 @@ class CExpRKMethod
   void interpolation(const double, double *);
 
 
+  void copyData();
+
+
   void findRoots();
 
 
@@ -112,6 +115,9 @@ class CExpRKMethod
 
 
   double rootFindByBisection(const size_t id);
+
+
+  double rootFindByFalsi(const size_t id);
 
 
   void findSlowReaction();
@@ -259,6 +265,11 @@ class CExpRKMethod
    */
   int mODEStateRecord;
   
+  /*
+   * mTCp, copy of mT
+   */
+
+  double mTCp;
 
   /*
    * mTNew, new time in the next step
@@ -272,10 +283,10 @@ class CExpRKMethod
   double *mYNew;
 
   /*
-   * mYInterp, a double pointer pointing to an array recording 
-   *           derivatives
+   * mYCp, a double pointer pointing to an array recording 
+   *        mY
    */
-  double *mYInterp;
+  double *mYCp;
 
   /*
    * mFinish, a boolean variable, indicating whether integration has 
