@@ -232,9 +232,7 @@ void CExpRKMethod::integrate()
 	    }
 	  else // Step Accept
 	    {
-
 	      mhMin = deps(mTNew) * 16.0;
-
 	      //std::cout << "Step Accepted" << std::endl;
 	      mAcceptNum++;
 	      
@@ -469,7 +467,7 @@ void CExpRKMethod::advanceStep()
   if(mEventFunc)
     {
       for(int i=0; i<mRootNum; i++)
-	mRootValue[i] = mRootValueOld[i];
+	mRootValueOld[i] = mRootValue[i];
     }
 
   return;
@@ -735,16 +733,16 @@ void CExpRKMethod::findRoots()
 	  mTimeRange[i].vRight  = mRootValue[i];
 
 	  hasEvent = true;
+	  std::cout << "Find root "<< i << std::endl;
 	}
       else
 	mTimeRange[i].inRange = false;
     }
 
   if (!hasEvent)
-    return;
-
-  std::cout << "Find root Here" << std::endl;
+      return;
   
+
   // 3. Find Roots
   int maxIter = 100;
   double tol, delta, step;
@@ -752,7 +750,7 @@ void CExpRKMethod::findRoots()
   SRoot root;
 
   double *rArray = mZ2;
-  double *yTry = mZ1;
+  double *yTry   = mZ1;
 
   tol = dmax(deps(mT), deps(mTNew)) * 128;
   tol = dmin(tol, dabs(mTNew-mT));
@@ -768,6 +766,9 @@ void CExpRKMethod::findRoots()
       vL = mTimeRange[r].vLeft;
       vR = mTimeRange[r].vRight;
       
+      std::cout << "tL " << tL << "  tR " << tR << std::endl;
+      std::cout << "vL " << vL << "  vR " << vR << std::endl;
+
       // (2) Regula Falsi Iteration 
       for(int i=0; i<maxIter; i++)
 	{
@@ -793,20 +794,34 @@ void CExpRKMethod::findRoots()
 	  step = dmax(0.5*tol, dmin(step, delta-0.5*tol));
 	  tTry = tL + step;
 	
+	  std::cout << "tTry= " << tTry << std::endl;
+
 	  interpolation(tTry, yTry);
+
+	  std::cout << "yTry  "; 
+	  for (int c=0; c<mDim; ++c)
+	    std::cout << yTry[c] << " ";
+	  std::cout << std::endl;
+	    
+
 	  (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
-	  
+
+	  std::cout << "rArray=" << rArray[r] << std::endl;
 	  // Update root r
 	  if(rArray[r]*vL >=0) // same sign as vL
 	    {
-	      mTimeRange[r].tLeft = tTry;
-	      mTimeRange[r].vLeft = rArray[r];
+	      tL = tTry;
+	      vL = rArray[r];
 	    }
 	  else
 	    {
-	      mTimeRange[r].tRight = tTry;
-	      mTimeRange[r].vRight = rArray[r];
+	      tR = tTry;
+	      vR = rArray[r];
 	    }
+
+	  std::cout << "tLeft " << mTimeRange[r].tLeft << "  tRight " << mTimeRange[r].tRight << std::endl;
+	  std::cout << "vLeft " << mTimeRange[r].vLeft << "  vRight " << mTimeRange[r].vRight << std::endl;
+	  getchar();
 
 	  // Update Other root information
 	  for(int j=r+1; j<mRootNum; j++)
