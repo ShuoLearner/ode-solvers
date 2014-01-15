@@ -918,8 +918,8 @@ void CExpRKMethod::findSlowReaction()
 
   // Record t and y
   tArray[0] = mTCp;
-  yArray[0] = mY[mDim-1];
-  for (int i=1; i<=mStage; i++)
+  yArray[0] = mYCp[mDim-1];
+  for (int i=1; i<mStage; i++)
     {
       if (mC[i]>0 && mC[i]<1)
 	{
@@ -932,6 +932,18 @@ void CExpRKMethod::findSlowReaction()
   tArray[cnt] = mTNew;
   yArray[cnt] = mYNew[mDim-1];
   cnt++;
+
+  /*
+  std::cout << "tArray ";
+  for(int i=0; i<cnt; i++)
+    std::cout << tArray[i] << " ";
+  std::cout << std::endl;
+
+  std::cout << "yArray ";
+  for(int i=0; i<cnt; i++)
+    std::cout << yArray[i] << " ";
+  std::cout << std::endl;
+  */
 
   // check whether yArray[i] is close to 0
   SRoot root;
@@ -965,6 +977,9 @@ void CExpRKMethod::findSlowReaction()
   root.id = -1;
   root.t  = t;
   mRootQueue.push(root);
+  /*std::cout << "result " << root.t << std::endl;
+    getchar();*/
+
   return;
 }
 
