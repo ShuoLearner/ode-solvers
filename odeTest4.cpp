@@ -20,8 +20,6 @@
 //typedef void (*pEvalF)(const double *, 
 //		       const double *, double * );
 
-
-
 void deriv(const double *, const double *,
 	   double *);
 
@@ -32,11 +30,13 @@ void event(const double *, const double *,
 int main()
 {
   CExpRKMethod ode45;
-  double y[4] = {0, 10000, 0, 0};
+  double y[4] = {0, 200, 0, 0};
   double r[10] = {0.235, .1895, .5223, .0023, .6829, .31108, .13829, .22208, .1713, .8002};
   
   ode45.mDim = 4;
   ode45.mY   = y;
+  ode45.mRootNum   = 3;
+  ode45.mEventFunc = &event;
   ode45.mDerivFunc = &deriv;
   ode45.mHybrid    = true;
   ode45.mODEState  = 0;
@@ -45,7 +45,7 @@ int main()
   y[3] = log(r[rId]);
 
   ode45.mT    = 0;
-  ode45.mTEnd = 3000;
+  ode45.mTEnd = 100;
   std::cout.precision(18);
   while(1)
     {
@@ -55,16 +55,22 @@ int main()
 	  if(ode45.mRootId == -1)
 	    {
 	      --y[1]; ++y[2];
-	      rId = (rId+1) % 10;
+	      rId  = (rId+1) % 10;
 	      y[3] = log(r[rId]);
 	      ode45.mODEState = 1;
 
-	      /*std::cout << "Root ID = -1" << std::endl;
-	      std::cout << "t: " << ode45.mT << "   y: ";
-	      for (int j=0; j<ode45.mDim; ++j)
-		std::cout << y[j] << " ";
-	      std::cout << std::endl;
-	      */
+	      std::cout << "t: " << ode45.mT << "  Slow " << y[2] << std::endl;
+	    }
+	  else if((ode45.mRootId == 0) || (ode45.mRootId == 1))
+	    {
+	      ode45.mODEState = 2;
+	      std::cout << "t: " << ode45.mT << "  ID " << ode45.mRootId << std::endl;
+	    }
+	  else
+	    {
+	      ode45.mODEState = 1;
+	      y[0] = 0; y[1] = 200; y[2] = 0;
+	      std::cout << "t: " << ode45.mT << "  ID " << ode45.mRootId << std::endl;
 	    }
 	}
       else if(ode45.mODEState == 4)
@@ -82,7 +88,6 @@ int main()
 	  break;
 	}
     }
-
   return 0;
 }
 
@@ -100,5 +105,11 @@ void deriv(const double *t, const double *y,
   return;
 }
 
-
-
+void event(const double *t, const double *y,
+	   const size_t *rn, double *root)
+{
+  root[0] = y[0] - 10;
+  root[1] = y[0] - 10 - 1e-9;
+  root[2] = y[2] - 30;
+  return;
+}

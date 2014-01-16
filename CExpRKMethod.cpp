@@ -6,6 +6,17 @@
 #include <iomanip>
 
 
+int compare(const void *r1, const void *r2)
+{
+  if((*(SRoot*)r1).t < (*(SRoot*)r2).t)
+    return -1;
+  else if((*(SRoot*)r1).t == (*(SRoot*)r2).t)
+    return 0;
+  else
+    return 1;
+}
+
+
 //*********************************//
 //* Constructor and Destructor    *//
 //*********************************//
@@ -62,8 +73,9 @@ CExpRKMethod::CExpRKMethod()
   mRootNum      = 0;
   mRootValue    = NULL;
   mRootValueOld = NULL;
-
-  clearQueue(mRootQueue);
+  mRootQueue    = NULL;
+  mQueueLen     = 0;
+  mQueueSite    = 0;
 
   // Default statistic variables
   mStepNum   = 0;
@@ -112,6 +124,13 @@ CExpRKMethod::~CExpRKMethod()
       mK = NULL;
     }
 
+  if(mRootQueue)
+    {
+      delete [] mRootQueue;
+      mRootQueue = NULL;
+    }
+
+
   if(mRootValueOld)
     {
       delete [] mRootValueOld;
@@ -159,7 +178,7 @@ void CExpRKMethod::integrate()
   if(mODEState == 1)//Restart
     {
       mFinish = false;
-      allocateSpace();
+      allocateSpace(); 
       setInitialStepSize();
       mDerivFunc(&mT, mY, mK[0]);//record derivative to
       //calculate mRootValueOld
@@ -170,7 +189,7 @@ void CExpRKMethod::integrate()
   else if (mODEState == 3) // has event
     {
       //If events queue isn't empty, deal with the next event, and return
-      if (!mRootQueue.empty())
+      if (!queueIsEmpty())
 	{
 	  calculateRootState();
 	  return;
@@ -265,14 +284,20 @@ void CExpRKMethod::integrate()
       copyData();
 
       if (mHasEvent)
-	findRoots();
+	  findRoots();
+      //std::cout << "find Root" << std::endl;
 
       if (mHybrid)
 	findSlowReaction();
+      //std::cout << "find Slow" << std::endl;
 
-      if (!mRootQueue.empty()) //has events
+      if (!queueIsEmpty()) //has events
 	{
+	  std::cout << "mQueueLen " << mQueueLen << "  mQueueSite " << mQueueSite << std::endl;
 	  //do sorting
+	  if(mQueueLen >= 2)
+	    qsort(mRootQueue, mQueueLen, sizeof(SRoot), compare);
+
 	  calculateRootState();
 	  return;
 	}
@@ -295,7 +320,7 @@ void CExpRKMethod::integrate()
       // (6) Advance New Step //
       //~~~~~~~~~~~~~~~~~~~~~~//
       advanceStep();
-      
+      //std::cout << "advanceStep()" << std::endl;
       //getchar();
     }
 
@@ -511,7 +536,7 @@ void CExpRKMethod::initialize()
       mRootValueOld = new double[mRootNum];
       mRootValue    = new double[mRootNum];
 
-      clearQueue(mRootQueue);
+      clearQueue();
     }
 
   return;
@@ -564,6 +589,19 @@ void CExpRKMethod::allocateSpace()
   
   mZ3 = new double[size];
 
+  // ----(3)----
+  if (mRootQueue)
+    delete [] mRootQueue;
+  
+  size = 0;
+  if(mEventFunc)
+    size += mRootNum;
+
+  if(mHybrid)
+    ++size;
+
+  mRootQueue = new SRoot[size+2];
+  clearQueue();
   return;
 }
 
@@ -768,6 +806,7 @@ void CExpRKMethod::copyData()
 void CExpRKMethod::findRoots()
 {
   SRoot root;
+  double tol = dmax(mAbsTol, dabs(mTNew)*mRelTol);
 
   for (int r=0; r<mRootNum; ++r)
     {
@@ -775,15 +814,29 @@ void CExpRKMethod::findRoots()
 	continue;
 
       root.id = r;
-      double threshold = 0.1, slope = dabs((mRootValue[r]-mRootValueOld[r]) / mh);
-      std::cout.precision(15);
-      if (slope > threshold)
-      	root.t = rootFindBySecant(r);
-      else
-	root.t = rootFindByFalsi(r);
-      //	root.t = rootFindByBisection(r);  
 
-      mRootQueue.push(root);	
+      if(dabs(mRootValueOld[r]) < deps(0)) //left value == 0
+	root.t = mTCp;
+      else if(dabs(mRootValue[r]) < deps(0)) //right value == 0
+	root.t = mTNew;
+      else if(dabs(mTCp - mTNew) < tol) //interval is too small
+	{
+	  if(dabs(mRootValueOld[r]) < dabs(mRootValue[r]))
+	    root.t = mTCp;
+	  else
+	    root.t = mTNew;
+	}
+      else
+	{
+	  double threshold = 0.1, slope = dabs((mRootValue[r]-mRootValueOld[r]) / mh);
+	  std::cout.precision(15);
+	  if (slope > threshold)
+	    root.t = rootFindBySecant(r);
+	  else
+	    root.t = rootFindByFalsi(r);
+	}
+
+      queuePush(root);	
     }
   return;
 }
@@ -804,24 +857,22 @@ double CExpRKMethod::rootFindBySecant(const size_t id)
   for (int i=0; i<maxIter; ++i)
     {
       delta = -y1 / yp;
-      tTry = x1 + delta;
-
-      if (dabs(delta) <= tol)
-	{
-	  mrEvalNum += i+1;
-	  //std::cout << "Secant Loop " << i+1 << std::endl;
-	  return tTry;
-	}
+      tTry  =  x1 + delta;
 
       interpolation(tTry, yTry);
       (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
+
+      if ((dabs(delta)<=tol) || (dabs(rArray[id])<deps(0)))
+	{
+	  mrEvalNum += i+1;
+	  return tTry;
+	}
 
       if((tTry>mTNew) || (tTry<mT))
 	std::cout << "Secant Method is dealing with t out of range [mT, mTNew]" << std::endl;
 
       yp = (rArray[id]-y1) / delta;
       x1 = tTry; y1 = rArray[id];
-
     }
 
   std::cout << "Secant Method executed more than " << maxIter << " times!" << std::endl;
@@ -839,8 +890,7 @@ double CExpRKMethod::rootFindByBisection(const size_t id)
     {
       if (dabs(x1-x2) < tol)
 	{
-	  mrEvalNum += i+1;
-	  //std::cout << "Bisection Loop " << i+1 << std::endl;
+	  mrEvalNum += i;
 	  return x1;
 	}
 
@@ -848,7 +898,13 @@ double CExpRKMethod::rootFindByBisection(const size_t id)
 
       interpolation(tTry, yTry);
       (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
-      
+     
+      if(dabs(rArray[id]) <= deps(0))
+	{
+	  mrEvalNum += i+1;
+	  return tTry;
+	}
+ 
       if(rArray[id]*y1 >= 0)
 	{
 	  x1 = tTry;
@@ -879,6 +935,13 @@ double CExpRKMethod::rootFindByFalsi(const size_t id)
       interpolation(tTry, yTry);
       (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
 
+      if ((dabs(tTry-tTry0)<tol) || (dabs(rArray[id])<deps(0)))
+	{
+	  mrEvalNum += i+1;
+	  return tTry;
+	}
+
+
       if(rArray[id]*y1 >= 0)
 	{
 	  x1 = tTry;
@@ -890,12 +953,6 @@ double CExpRKMethod::rootFindByFalsi(const size_t id)
 	  y2 = rArray[id];
 	}
 
-      if (dabs(tTry-tTry0) < tol)
-	{
-	  mrEvalNum += i+1;
-	  //std::cout << "Falsi Loop " << i+1 << std::endl;
-	  return tTry;
-	}
 
       tTry0 = tTry;
     }
@@ -933,29 +990,16 @@ void CExpRKMethod::findSlowReaction()
   yArray[cnt] = mYNew[mDim-1];
   cnt++;
 
-  /*
-  std::cout << "tArray ";
-  for(int i=0; i<cnt; i++)
-    std::cout << tArray[i] << " ";
-  std::cout << std::endl;
-
-  std::cout << "yArray ";
-  for(int i=0; i<cnt; i++)
-    std::cout << yArray[i] << " ";
-  std::cout << std::endl;
-  */
-
   // check whether yArray[i] is close to 0
   SRoot root;
 
-  double tol = EPS;
   for(int i=0; i<cnt; ++i)
     {
-      if(dabs(yArray[i]) <= tol)
+      if(dabs(yArray[i]) < deps(mAbsTol))
 	{
 	  root.id = -1;
 	  root.t  = tArray[i];
-	  mRootQueue.push(root);
+	  queuePush(root);
 	  return;
 	}
     }
@@ -976,10 +1020,7 @@ void CExpRKMethod::findSlowReaction()
 
   root.id = -1;
   root.t  = t;
-  mRootQueue.push(root);
-  /*std::cout << "result " << root.t << std::endl;
-    getchar();*/
-
+  queuePush(root);
   return;
 }
 
@@ -987,15 +1028,15 @@ void CExpRKMethod::findSlowReaction()
 
 void CExpRKMethod::calculateRootState()
 {
-  if (mRootQueue.empty())
+  if (queueIsEmpty())
     {
       std::cout << "No root in mRootQueue! Check Code......" << std::endl;
       mODEState = -2;
       return;
     }
 
-  SRoot root = mRootQueue.front();
-  mRootQueue.pop();
+  SRoot root = mRootQueue[mQueueSite];
+  queuePop();
 
   mRootId = root.id;
   mT      = root.t;
@@ -1095,13 +1136,43 @@ double CExpRKMethod::dabs(const double &x)
 
 double CExpRKMethod::deps(const double &x)
 {
-  return (x==0)? EPS0 : dabs(x)*EPS;
+  return (x==0)? dmin(deps(mAbsTol), EPS) : dabs(x)*EPS;
 }
 
 
-void CExpRKMethod::clearQueue(std::queue<SRoot> &qRoot)
+void CExpRKMethod::clearQueue()
 {
-  std::queue<SRoot> emp;
-  std::swap(qRoot, emp);
+  mQueueLen = 0; mQueueSite = 0;
   return;
 }
+
+
+bool CExpRKMethod::queueIsEmpty()
+{
+  return (mQueueSite >= mQueueLen);
+}
+
+
+void CExpRKMethod::queuePop()
+{
+  if(queueIsEmpty())
+    {
+      std::cout << "mRootQueue is EMPTY, no elment to pop" << std::endl;
+      return;
+    }
+
+  ++mQueueSite;
+  if(queueIsEmpty() && (mQueueLen>0))
+    clearQueue();
+
+  return;
+}
+
+
+void CExpRKMethod::queuePush(const SRoot &root)
+{
+  mRootQueue[mQueueLen++] = root;
+  return;
+}
+
+

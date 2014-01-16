@@ -1,6 +1,4 @@
 #include <iostream>
-#include <queue>
-
 
 #ifndef CEXPRKMETHOD
 #define CEXPRKMETHOD
@@ -8,7 +6,7 @@
 
 #define MAX_STAGE 8
 #define EPS       2.220446049250313e-16
-#define EPS0      4.940656458412465e-100
+#define EPS0      4.940656458412465e-320
 
 //Define function pointer of functions for computing derivative and 
 //event function
@@ -35,6 +33,8 @@ struct SRoot
   double t;
 };
 
+
+int compare(const void *r1, const void *r2);
 
 class CExpRKMethod
 {
@@ -150,7 +150,16 @@ class CExpRKMethod
   double deps(const double&);
 
 
-  void clearQueue(std::queue<SRoot> &qRoot);
+  void clearQueue();
+
+  
+  bool queueIsEmpty();
+
+  
+  void queuePop();
+
+
+  void queuePush(const SRoot&);
 
 
   /*============Attributes============*/
@@ -443,7 +452,10 @@ class CExpRKMethod
    * root index and corresponding time, in a time ascending 
    * order
    */
-  std::queue<SRoot> mRootQueue;
+  SRoot *mRootQueue;
+
+  size_t mQueueLen;
+  size_t mQueueSite;
 
   /*
    * mI, a two dimension double array, for interpolation 
