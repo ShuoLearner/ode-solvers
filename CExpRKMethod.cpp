@@ -1136,7 +1136,7 @@ double CExpRKMethod::dabs(const double &x)
 
 double CExpRKMethod::deps(const double &x)
 {
-  return (x==0)? dmin(deps(mAbsTol), EPS) : dabs(x)*EPS;
+  return (x==0)? EPS0 : dabs(x)*EPS;
 }
 
 

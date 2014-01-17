@@ -6,7 +6,7 @@
 
 #define MAX_STAGE 8
 #define EPS       2.220446049250313e-16
-#define EPS0      4.940656458412465e-320
+#define EPS0      4.940656458412465e-300
 
 //Define function pointer of functions for computing derivative and 
 //event function
