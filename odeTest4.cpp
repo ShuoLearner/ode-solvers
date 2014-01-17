@@ -64,7 +64,7 @@ int main()
 	  else if((ode45.mRootId == 0) || (ode45.mRootId == 1))
 	    {
 	      ode45.mODEState = 2;
-	      std::cout << "t: " << ode45.mT << "  ID " << ode45.mRootId << std::endl;
+	      //std::cout << "t: " << ode45.mT << "  ID " << ode45.mRootId << std::endl;
 	    }
 	  else
 	    {

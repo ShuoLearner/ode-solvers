@@ -995,7 +995,7 @@ void CExpRKMethod::findSlowReaction()
 
   for(int i=0; i<cnt; ++i)
     {
-      if(dabs(yArray[i]) < deps(mAbsTol))
+      if(dabs(yArray[i]) < deps(0))
 	{
 	  root.id = -1;
 	  root.t  = tArray[i];
