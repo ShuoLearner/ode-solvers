@@ -532,8 +532,14 @@ void CExpRKMethod::initialize()
     }
   else
     {
-      mHasEvent     = true;
+      mHasEvent = true;
+
+      if (mRootValueOld)
+	delete [] mRootValueOld;
       mRootValueOld = new double[mRootNum];
+
+      if (mRootValue)
+	delete[] mRootValue;
       mRootValue    = new double[mRootNum];
 
       clearQueue();
@@ -600,6 +606,8 @@ void CExpRKMethod::allocateSpace()
   if(mHybrid)
     ++size;
 
+  if (mRootQueue)
+    delete [] mRootQueue;
   mRootQueue = new SRoot[size+2];
   clearQueue();
   return;

@@ -228,7 +228,7 @@ class CExpRKMethod
    * mRootId, a size_t variable indicating which root is found
    *          0 <= mRootId <= mRootNum-1
    */
-  size_t mRootId;
+  int mRootId;
 
 
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
