@@ -69,7 +69,7 @@ CExpRKMethod::CExpRKMethod()
   mODEStateRecord = 0;
 
   // Default root finder related
-  mRootId       = -1;
+  mRootId       = -2;
   mRootNum      = 0;
   mRootValue    = NULL;
   mRootValueOld = NULL;
@@ -88,8 +88,6 @@ CExpRKMethod::CExpRKMethod()
   mZ1 = NULL;
   mZ2 = NULL;
   mZ3 = NULL;
-
-  std::cout << "Finish Constructur" << std::endl;
 }
 
 /*
@@ -293,7 +291,6 @@ void CExpRKMethod::integrate()
 
       if (!queueIsEmpty()) //has events
 	{
-	  std::cout << "mQueueLen " << mQueueLen << "  mQueueSite " << mQueueSite << std::endl;
 	  //do sorting
 	  if(mQueueLen >= 2)
 	    qsort(mRootQueue, mQueueLen, sizeof(SRoot), compare);
@@ -539,8 +536,8 @@ void CExpRKMethod::initialize()
       mRootValueOld = new double[mRootNum];
 
       if (mRootValue)
-	delete[] mRootValue;
-      mRootValue    = new double[mRootNum];
+	delete [] mRootValue;
+      mRootValue = new double[mRootNum];
 
       clearQueue();
     }
@@ -596,9 +593,6 @@ void CExpRKMethod::allocateSpace()
   mZ3 = new double[size];
 
   // ----(3)----
-  if (mRootQueue)
-    delete [] mRootQueue;
-  
   size = 0;
   if(mEventFunc)
     size += mRootNum;
