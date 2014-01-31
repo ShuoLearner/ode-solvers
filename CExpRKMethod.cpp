@@ -808,7 +808,8 @@ void CExpRKMethod::copyData()
 void CExpRKMethod::findRoots()
 {
   SRoot root;
-  double tol = dmax(mAbsTol, dabs(mTNew)*mRelTol);
+  //double tol = dmax(mAbsTol, dabs(mTCp)*mRelTol);
+  double tol = deps(dabs(mTCp)) * 128;
 
   for (int r=0; r<mRootNum; ++r)
     {
@@ -830,7 +831,7 @@ void CExpRKMethod::findRoots()
 	}
       else
 	{
-	  double threshold = 0.1, slope = dabs((mRootValue[r]-mRootValueOld[r]) / mh);
+	  double threshold = 0.1, slope = dabs((mRootValue[r]-mRootValueOld[r]) / (mTNew-mTCp));
 	  std::cout.precision(15);
 	  if (slope > threshold)
 	    root.t = rootFindBySecant(r);
@@ -846,13 +847,15 @@ void CExpRKMethod::findRoots()
 double CExpRKMethod::rootFindBySecant(const size_t id)
 {
   int maxIter = 20;
-  double tol = dmin(deps(dabs(mTNew)), mTNew-mTCp);
+  //double tol = dmin(deps(dabs(mTCp)), dabs(mTNew-mTCp));
+  double tol = deps(dabs(mTCp)) * 128;
   double *yTry = mZ1, *rArray = mZ2;
   double x1 = mTCp, y1 = mRootValueOld[id], tTry;
   double delta, yp;
 
   tTry = x1 + dmax((mTNew-mTCp)/10.0, tol);
   interpolation(tTry, yTry);
+
   (*mEventFunc)(&tTry, yTry, &mRootNum, rArray);
   yp = (rArray[id]-y1) / (tTry-mTCp);
 
@@ -884,7 +887,8 @@ double CExpRKMethod::rootFindBySecant(const size_t id)
 double CExpRKMethod::rootFindByBisection(const size_t id)
 {
   int maxIter = 50;
-  double tol = dmin(deps(dabs(mTNew)), mTNew-mTCp);
+  //double tol = dmin(deps(dabs(mTNew)), mTNew-mTCp);
+  double tol = deps(dabs(mTCp)) * 128;
   double *yTry = mZ1, *rArray = mZ2;
   double x1 = mTCp, y1 = mRootValueOld[id], x2 = mTNew, y2 = mRootValue[id], tTry;
 

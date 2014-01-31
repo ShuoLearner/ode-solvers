@@ -29,7 +29,7 @@ typedef void (*pEvalF)(const double *,
 
 struct SRoot
 {
-  size_t id;
+  int id;
   double t;
 };
 
