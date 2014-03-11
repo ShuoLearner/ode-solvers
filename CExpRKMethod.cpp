@@ -7,7 +7,7 @@
 
 
 int compare(const void *r1, const void *r2)
-{
+nn{
   if((*(SRoot*)r1).t < (*(SRoot*)r2).t)
     return -1;
   else if((*(SRoot*)r1).t == (*(SRoot*)r2).t)
@@ -193,7 +193,10 @@ void CExpRKMethod::integrate()
 	  return;
 	}
       else
-	advanceStep();
+	{
+	  advanceStep();
+	  mODEState = 1;
+	{
     }
   else if(mODEState == -2)//has error
     return;

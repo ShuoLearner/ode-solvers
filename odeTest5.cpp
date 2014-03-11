@@ -4,6 +4,7 @@
 #include <math.h>
 #include "CExpRKMethod.h"
 
+#define MMOL 6.02214129e20
 // Parameters:
 // 1. double mT
 // 2. double mY
@@ -32,8 +33,8 @@ void event(const double *, const double *,
 int main()
 {
   CExpRKMethod ode45;
-  double y[4] = {1.5, 1.0, 0.0, -1.0};
-  
+  double y[4] = {1.5*MMOL, 1.0*MMOL, 0.0, -1.0};
+
   ode45.mDim = 4;
   ode45.mY   = y;
   ode45.mDerivFunc = &deriv;
@@ -43,11 +44,12 @@ int main()
   ode45.mODEState  = 0;
 
   ode45.mAbsTol = 1e-9;
-  ode45.mRelTol = 1e-6;
+  ode45.mRelTol = 1e-8;
 
   ode45.mT    = 0;
   ode45.mTEnd = 300;
   std::cout.precision(15);
+
   while(1)
     {
       ode45.integrate();
@@ -55,11 +57,11 @@ int main()
 	{
 	  std::cout << "t: " << ode45.mT << " ";
 	  for (int j=0; j<ode45.mDim-1; ++j)
-	    std::cout << y[j] << " ";	    
+	    std::cout << y[j]/MMOL << " ";	    
 	  std::cout << std::endl;
 
-	  y[0] = 1.5;
-	  y[1] = 1.0;
+	  y[0] = 1.5*MMOL;
+	  y[1] = 1.0*MMOL;
 	  y[2] = 0;
 	  ode45.mODEState = 1;
 	}
@@ -68,7 +70,7 @@ int main()
 	  std::cout << "Finish Integration!" << std::endl;
 	  std::cout << "t: " << ode45.mT << " ";
 	  for (int j=0; j<ode45.mDim-1; ++j)
-	    std::cout << y[j] << " ";	    
+	    std::cout << y[j]/MMOL << " ";	    
 	  std::cout << std::endl;
 	  break;
 	}
@@ -100,6 +102,6 @@ void deriv(const double *t, const double *y,
 //		       const size_t *, double * );
 void event(const double *t, const double *y, const size_t *n, double *v)
 {
-  v[0] = y[2] - 1.0;
+  v[0] = y[2]/MMOL - 1.0;
   return;
 }
